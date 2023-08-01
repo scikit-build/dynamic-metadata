@@ -57,7 +57,9 @@ repos:
         files: src|tests
         args: []
         additional_dependencies:
+          - hatch-fancy-pypi-readme
           - pytest
+          - tomli
 
   - repo: https://github.com/codespell-project/codespell
     rev: "v2.2.5"

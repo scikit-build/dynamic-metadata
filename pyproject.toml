@@ -102,6 +102,10 @@ module = "dynamic_metadata.*"
 disallow_untyped_defs = true
 disallow_incomplete_defs = true
 
+[[tool.mypy.overrides]]
+module = "setuptools_scm"
+ignore_missing_imports = true
+
 
 [tool.ruff]
 select = [
