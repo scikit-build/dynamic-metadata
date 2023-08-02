@@ -58,6 +58,7 @@ repos:
         args: []
         additional_dependencies:
           - hatch-fancy-pypi-readme
+          - importlib_resources
           - pytest
           - tomli
 
