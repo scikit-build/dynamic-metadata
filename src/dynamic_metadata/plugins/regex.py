@@ -26,16 +26,16 @@ def dynamic_metadata(
         msg = "Must set 'input' and/or 'regex' to strings"
         raise RuntimeError(msg)
 
-    input = settings["input"]
+    input_filename = settings["input"]
     regex = settings.get(
         "regex", r'(?i)^(__version__|VERSION) *= *([\'"])v?(?P<value>.+?)\2'
     )
 
-    with Path(input).open(encoding="utf-8") as f:
+    with Path(input_filename).open(encoding="utf-8") as f:
         match = re.search(regex, f.read())
 
     if not match:
-        msg = f"Couldn't find {regex!r} in {input}"
+        msg = f"Couldn't find {regex!r} in {input_filename}"
         raise RuntimeError(msg)
 
     return match.group("value")

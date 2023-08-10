@@ -54,7 +54,8 @@ include that in your requirements. Make sure the version is marked dynamic in
 your project table. And then you specify `version.provider`. The other options
 are defined by the plugin; this one takes a required `input` file and an
 optional `regex` (which defaults to the expression you see above). The regex
-needs to have a `"value"` named group, which it will set.
+optional `regex` (which defaults to the expression you see above). The regex
+needs to have a `"value"` named group (`?P<value>`), which it will set.
 
 ## For plugin authors
 
@@ -120,6 +121,8 @@ def dynamic_metadata(
         raise RuntimeError("Must set 'input' and/or 'regex' to strings")
 
     input = settings["input"]
+    # If not explicitly specified in the `tool.dynamic-metadata.v1.<field-name>` table,
+    # the default regex provided below is used.
     regex = settings.get(
         "regex", r'(?i)^(__version__|VERSION) *= *([\'"])v?(?P<value>.+?)\2'
     )
