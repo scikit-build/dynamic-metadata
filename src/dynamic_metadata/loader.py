@@ -8,7 +8,7 @@ from typing import Any, Union
 
 from ._compat.typing import Protocol
 
-__all__ = ["load_provider"]
+__all__ = ["load_provider", "load_dynamic_metadata"]
 
 
 def __dir__() -> list[str]:
@@ -68,10 +68,12 @@ def load_provider(
 
 def load_dynamic_metadata(
     metadata: Mapping[str, Mapping[str, str]]
-) -> Generator[DMProtocols, None, None]:
-    for _name, orig_config in metadata.items():
+) -> Generator[tuple[str, DMProtocols | None, dict[str, str]], None, None]:
+    for field, orig_config in metadata.items():
         if "provider" in orig_config:
             config = dict(orig_config)
             provider = config.pop("provider")
             provider_path = config.pop("provider-path", None)
-            yield load_provider(provider, provider_path)
+            yield field, load_provider(provider, provider_path), config
+        else:
+            yield field, None, dict(orig_config)
