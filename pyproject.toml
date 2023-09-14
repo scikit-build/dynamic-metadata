@@ -63,6 +63,8 @@ envs.default.dependencies = [
   "pytest-cov",
 ]
 
+[project.entry-points."validate_pyproject.tool_schema"]
+dynamic-metadata = "dynamic_metadata.schema:get_schema"
 
 [tool.pytest.ini_options]
 minversion = "6.0"
@@ -101,6 +103,10 @@ disallow_incomplete_defs = false
 module = "dynamic_metadata.*"
 disallow_untyped_defs = true
 disallow_incomplete_defs = true
+
+[[tool.mypy.overrides]]
+module = "setuptools_scm"
+ignore_missing_imports = true
 
 
 [tool.ruff]
@@ -159,4 +165,8 @@ messages_control.disable = [
   "line-too-long",
   "missing-module-docstring",
   "wrong-import-position",
+  "missing-class-docstring",
+  "missing-function-docstring",
+  "import-outside-toplevel",
+  "invalid-name",
 ]
