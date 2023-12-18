@@ -24,7 +24,7 @@ jobs:
           fetch-depth: 0
 
       - name: Build sdist and wheel
-        uses: hynek/build-and-inspect-python-package@v1
+        uses: hynek/build-and-inspect-python-package@v2
 
   publish:
     needs: [dist]
