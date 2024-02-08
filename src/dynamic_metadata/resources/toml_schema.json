@@ -5,27 +5,21 @@
   "type": "object",
   "additionalProperties": false,
   "properties": {
-    "v1": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "version": { "$ref": "#/$defs/entry" },
-        "description": { "$ref": "#/$defs/entry" },
-        "readme": { "$ref": "#/$defs/entry" },
-        "requires-python": { "$ref": "#/$defs/entry" },
-        "license": { "$ref": "#/$defs/entry" },
-        "authors": { "$ref": "#/$defs/entry" },
-        "maintainers": { "$ref": "#/$defs/entry" },
-        "keywords": { "$ref": "#/$defs/entry" },
-        "classifiers": { "$ref": "#/$defs/entry" },
-        "urls": { "$ref": "#/$defs/entry" },
-        "scripts": { "$ref": "#/$defs/entry" },
-        "gui-scripts": { "$ref": "#/$defs/entry" },
-        "entry-points": { "$ref": "#/$defs/entry" },
-        "dependencies": { "$ref": "#/$defs/entry" },
-        "optional-dependencies": { "$ref": "#/$defs/entry" }
-      }
-    }
+    "version": { "$ref": "#/$defs/entry" },
+    "description": { "$ref": "#/$defs/entry" },
+    "readme": { "$ref": "#/$defs/entry" },
+    "requires-python": { "$ref": "#/$defs/entry" },
+    "license": { "$ref": "#/$defs/entry" },
+    "authors": { "$ref": "#/$defs/entry" },
+    "maintainers": { "$ref": "#/$defs/entry" },
+    "keywords": { "$ref": "#/$defs/entry" },
+    "classifiers": { "$ref": "#/$defs/entry" },
+    "urls": { "$ref": "#/$defs/entry" },
+    "scripts": { "$ref": "#/$defs/entry" },
+    "gui-scripts": { "$ref": "#/$defs/entry" },
+    "entry-points": { "$ref": "#/$defs/entry" },
+    "dependencies": { "$ref": "#/$defs/entry" },
+    "optional-dependencies": { "$ref": "#/$defs/entry" }
   },
   "$defs": {
     "entry": {
