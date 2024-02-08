@@ -19,7 +19,7 @@ Every external plugin must specify a "provider", which is a module that provides
 the API listed in the next section.
 
 ```toml
-[tool.dynamic-metadata.v1]
+[tool.dynamic-metadata]
 <field-name>.provider = "<module>"
 ```
 
@@ -43,7 +43,7 @@ build-backend = "..."
 [project]
 dynamic = ["version"]
 
-[tool.dynamic-metadata.v1.version]
+[tool.dynamic-metadata.version]
 provider = "dynamic_metadata.plugins.regex"
 input = "src/my_package/__init__.py"
 regex = '(?i)^(__version__|VERSION) *= *([\'"])v?(?P<value>.+?)\2'
@@ -82,7 +82,7 @@ A plugin can return METADATA 2.2 dynamic status:
 
 ```python
 def dynamic_wheel(field: str, settings: Mapping[str, Any] | None = None) -> bool:
-    ...  # Return true if metadata can change from SDist to whlee (METADATA 2.2 feature)
+    ...  # Return true if metadata can change from SDist to wheel (METADATA 2.2 feature)
 ```
 
 If this hook is not implemented, it will default to "false". Note that "version"
@@ -121,7 +121,7 @@ def dynamic_metadata(
         raise RuntimeError("Must set 'input' and/or 'regex' to strings")
 
     input = settings["input"]
-    # If not explicitly specified in the `tool.dynamic-metadata.v1.<field-name>` table,
+    # If not explicitly specified in the `tool.dynamic-metadata.<field-name>` table,
     # the default regex provided below is used.
     regex = settings.get(
         "regex", r'(?i)^(__version__|VERSION) *= *([\'"])v?(?P<value>.+?)\2'
@@ -143,7 +143,7 @@ library provides some helper functions you can use if you want, but you can
 implement them yourself following the standard provided or vendor the helper
 file (which will be tested and supported).
 
-You should collect the contents of `tool.dynamic-metadata.v1` and load each,
+You should collect the contents of `tool.dynamic-metadata` and load each,
 something like this:
 
 ```python
