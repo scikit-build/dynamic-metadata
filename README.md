@@ -13,8 +13,9 @@
 This repo is to support
 https://github.com/scikit-build/scikit-build-core/issues/230.
 
-| :exclamation: This plugin is still a WiP!|
-|------------------------------------------|
+> [!WARNING]
+> 
+> This plugin is still a WiP!
 
 ## For users
 
