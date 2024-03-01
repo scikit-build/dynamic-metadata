@@ -1,0 +1,35 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema",
+  "$id": "https://github.com/scikit-build/dynamic-metadata/blob/main/src/dynamic-metadata/resources/toml_schema.json",
+  "description": "Dynamic metadata plugin configuration.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "version": { "$ref": "#/$defs/entry" },
+    "description": { "$ref": "#/$defs/entry" },
+    "readme": { "$ref": "#/$defs/entry" },
+    "requires-python": { "$ref": "#/$defs/entry" },
+    "license": { "$ref": "#/$defs/entry" },
+    "authors": { "$ref": "#/$defs/entry" },
+    "maintainers": { "$ref": "#/$defs/entry" },
+    "keywords": { "$ref": "#/$defs/entry" },
+    "classifiers": { "$ref": "#/$defs/entry" },
+    "urls": { "$ref": "#/$defs/entry" },
+    "scripts": { "$ref": "#/$defs/entry" },
+    "gui-scripts": { "$ref": "#/$defs/entry" },
+    "entry-points": { "$ref": "#/$defs/entry" },
+    "dependencies": { "$ref": "#/$defs/entry" },
+    "optional-dependencies": { "$ref": "#/$defs/entry" }
+  },
+  "$defs": {
+    "entry": {
+      "type": "object",
+      "required": ["provider"],
+      "additionalProperties": true,
+      "properties": {
+        "provider": { "type": "string" },
+        "provider-path": { "type": "string" }
+      }
+    }
+  }
+}
