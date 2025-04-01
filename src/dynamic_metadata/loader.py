@@ -6,7 +6,7 @@ from collections.abc import Generator, Iterable, Mapping
 from pathlib import Path
 from typing import Any, Protocol, Union
 
-__all__ = ["load_provider", "load_dynamic_metadata"]
+__all__ = ["load_dynamic_metadata", "load_provider"]
 
 
 def __dir__() -> list[str]:
@@ -63,7 +63,7 @@ def load_provider(
 
 
 def load_dynamic_metadata(
-    metadata: Mapping[str, Mapping[str, str]]
+    metadata: Mapping[str, Mapping[str, str]],
 ) -> Generator[tuple[str, DMProtocols | None, dict[str, str]], None, None]:
     for field, orig_config in metadata.items():
         if "provider" in orig_config:
