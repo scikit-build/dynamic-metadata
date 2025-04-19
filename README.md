@@ -23,8 +23,8 @@ Every external plugin must specify a "provider", which is a module that provides
 the API listed in the next section.
 
 ```toml
-[tool.dynamic-metadata]
-<field-name>.provider = "<module>"
+[tool.dynamic-metadata.<field-name>]
+provider = "<module>"
 ```
 
 There is an optional field: "provider-path", which specifies a local path to
@@ -32,8 +32,7 @@ load a plugin from, allowing plugins to reside inside your own project.
 
 All other fields are passed on to the plugin, allowing plugins to specify custom
 configuration per field. Plugins can, if desired, use their own `tool.*`
-sections as well; plugins only supporting one metadata field are more likely to
-do this.
+sections as well.
 
 ### Example: regex
 
