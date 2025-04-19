@@ -74,8 +74,7 @@ implement; one required hook and two optional hooks. The required hook is:
 def dynamic_metadata(
     field: str,
     settings: dict[str, object] | None = None,
-) -> str | dict[str, str | None]:
-    ...  # return the value of the metadata
+) -> str | dict[str, str | None]: ...  # return the value of the metadata
 ```
 
 The backend will call this hook in the same directory as PEP 517's hooks.
@@ -85,8 +84,11 @@ There are two optional hooks.
 A plugin can return METADATA 2.2 dynamic status:
 
 ```python
-def dynamic_wheel(field: str, settings: Mapping[str, Any] | None = None) -> bool:
-    ...  # Return true if metadata can change from SDist to wheel (METADATA 2.2 feature)
+def dynamic_wheel(
+    field: str, settings: Mapping[str, Any] | None = None
+) -> (
+    bool
+): ...  # Return true if metadata can change from SDist to wheel (METADATA 2.2 feature)
 ```
 
 If this hook is not implemented, it will default to "false". Note that "version"
@@ -98,8 +100,7 @@ A plugin can also decide at runtime if it needs extra dependencies:
 ```python
 def get_requires_for_dynamic_metadata(
     settings: Mapping[str, Any] | None = None,
-) -> list[str]:
-    ...  # return list of packages to require
+) -> list[str]: ...  # return list of packages to require
 ```
 
 This is mostly used to provide wrappers for existing non-compatible plugins and

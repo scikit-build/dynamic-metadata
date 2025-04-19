@@ -11,7 +11,9 @@ else:
 
 
 def get_schema() -> dict[str, Any]:
-    with resources.files("dynamic_metadata").joinpath(
-        "resources/toml_schema.json"
-    ).open(encoding="utf-8") as f:
+    with (
+        resources.files("dynamic_metadata")
+        .joinpath("resources/toml_schema.json")
+        .open(encoding="utf-8")
+    ) as f:
         return json.load(f)  # type: ignore[no-any-return]
