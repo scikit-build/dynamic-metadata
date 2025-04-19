@@ -1,14 +1,23 @@
+#!/usr/bin/env -S uv run -q
+
+# /// script
+# dependencies = ["nox>=2025.2.9"]
+# ///
+
 from __future__ import annotations
 
 import argparse
-import shutil
 from pathlib import Path
 
 import nox
 
-DIR = Path(__file__).parent.resolve()
+nox.needs_version = ">=2025.2.9"
+nox.options.default_venv_backend = "uv|virtualenv"
 
-nox.options.sessions = ["lint", "pylint", "tests"]
+DIR = Path(__file__).parent.resolve()
+PYPROJECT = nox.project.load_toml("pyproject.toml")
+TEST_DEPS = nox.project.dependency_groups(PYPROJECT, "test")
+DOCS_DEPS = nox.project.dependency_groups(PYPROJECT, "docs")
 
 
 @nox.session
@@ -36,11 +45,11 @@ def tests(session: nox.Session) -> None:
     """
     Run the unit and regular tests. Use --cov to activate coverage.
     """
-    session.install(".[test]")
+    session.install("-e.", *TEST_DEPS)
     session.run("pytest", *session.posargs)
 
 
-@nox.session
+@nox.session(default=False)
 def docs(session: nox.Session) -> None:
     """
     Build the docs. Pass "--serve" to serve.
@@ -56,7 +65,7 @@ def docs(session: nox.Session) -> None:
     if args.builder != "html" and args.serve:
         session.error("Must not specify non-HTML builder with --serve")
 
-    session.install(".[docs]")
+    session.install("-e.", *DOCS_DEPS)
     session.chdir("docs")
 
     if args.builder == "linkcheck":
@@ -83,7 +92,7 @@ def docs(session: nox.Session) -> None:
         session.run("python", "-m", "http.server", "8000", "-d", "_build/html")
 
 
-@nox.session
+@nox.session(default=False)
 def build_api_docs(session: nox.Session) -> None:
     """
     Build (regenerate) API docs.
@@ -102,15 +111,15 @@ def build_api_docs(session: nox.Session) -> None:
     )
 
 
-@nox.session
+@nox.session(default=False)
 def build(session: nox.Session) -> None:
     """
     Build an SDist and wheel.
     """
 
-    build_p = DIR.joinpath("build")
-    if build_p.exists():
-        shutil.rmtree(build_p)
-
     session.install("build")
     session.run("python", "-m", "build")
+
+
+if __name__ == "__main__":
+    nox.main()

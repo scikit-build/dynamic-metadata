@@ -33,15 +33,21 @@ dependencies = [
   "typing_extensions >=4.6; python_version<'3.11'",
 ]
 
-[project.optional-dependencies]
+[project.urls]
+Homepage = "https://github.com/scikit-build/dynamic-metadata"
+"Bug Tracker" = "https://github.com/scikit-build/dynamic-metadata/issues"
+Discussions = "https://github.com/scikit-build/dynamic-metadata/discussions"
+Changelog = "https://github.com/scikit-build/dynamic-metadata/releases"
+
+[project.entry-points."validate_pyproject.tool_schema"]
+dynamic-metadata = "dynamic_metadata.schema:get_schema"
+
+[dependency-groups]
 test = [
-  "pytest >=6",
+  "pytest >=7",
   "pytest-cov >=3",
 ]
-dev = [
-  "pytest >=6",
-  "pytest-cov >=3",
-]
+dev = [{ include-group = "test" }]
 docs = [
   "sphinx>=4.0",
   "myst_parser>=0.13",
@@ -51,24 +57,12 @@ docs = [
   "furo",
 ]
 
-[project.urls]
-Homepage = "https://github.com/scikit-build/dynamic-metadata"
-"Bug Tracker" = "https://github.com/scikit-build/dynamic-metadata/issues"
-Discussions = "https://github.com/scikit-build/dynamic-metadata/discussions"
-Changelog = "https://github.com/scikit-build/dynamic-metadata/releases"
-
 [tool.hatch]
 version.path = "src/dynamic_metadata/__init__.py"
-envs.default.dependencies = [
-  "pytest",
-  "pytest-cov",
-]
 
-[project.entry-points."validate_pyproject.tool_schema"]
-dynamic-metadata = "dynamic_metadata.schema:get_schema"
 
 [tool.pytest.ini_options]
-minversion = "6.0"
+minversion = "7.0"
 addopts = ["-ra", "--showlocals", "--strict-markers", "--strict-config"]
 xfail_strict = true
 filterwarnings = [
