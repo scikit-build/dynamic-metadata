@@ -25,12 +25,14 @@ classifiers = [
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
   "Topic :: Scientific/Engineering",
   "Typing :: Typed",
 ]
 dynamic = ["version"]
 dependencies = [
   "typing_extensions >=4.6; python_version<'3.11'",
+  "graphlib_backport >=1; python_version<'3.9'",
 ]
 
 [project.urls]
@@ -99,7 +101,7 @@ disallow_untyped_defs = true
 disallow_incomplete_defs = true
 
 [[tool.mypy.overrides]]
-module = "setuptools_scm"
+module = ["setuptools_scm", "graphlib"]
 ignore_missing_imports = true
 
 
@@ -151,4 +153,5 @@ messages_control.disable = [
   "missing-function-docstring",
   "import-outside-toplevel",
   "invalid-name",
+  "unused-argument",  # Ruff
 ]
