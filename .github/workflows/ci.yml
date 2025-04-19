@@ -35,10 +35,11 @@ jobs:
           path: ~/.cache/pre-commit
           key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
       - name: Run pre-commit
-        run: uvx --with pre-commit-uv pre-commit run --all-files --show-diff-on-failure
+        run:
+          uvx --with pre-commit-uv pre-commit run --all-files
+          --show-diff-on-failure
       - name: Run PyLint
         run: uvx nox -s pylint -- --output-format=github
-
 
   checks:
     name: Check Python ${{ matrix.python-version }} on ${{ matrix.runs-on }}
