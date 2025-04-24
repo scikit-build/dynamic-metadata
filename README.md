@@ -64,8 +64,8 @@ needs to have a `"value"` named group (`?P<value>`), which it will set.
 
 **You do not need to depend on dynamic-metadata to write a plugin.** This
 library provides testing and static typing helpers that are not needed at
-runtime, along with a reference implementation that you can either use as
-an example, or use directly if you are fine to require the dependency.
+runtime, along with a reference implementation that you can either use as an
+example, or use directly if you are fine to require the dependency.
 
 Like PEP 517's hooks, `dynamic-metadata` defines a set of hooks that you can
 implement; one required hook and two optional hooks. The required hook is:
@@ -150,8 +150,8 @@ implement them yourself following the standard provided or vendor the helper
 file (which will be tested and supported).
 
 You should collect the contents of `tool.dynamic-metadata` and load each one.
-You should respect requests for metadata from other plugins, as well; to see
-how to do that, refer to `src/dynamic-metadata/loader.py`.
+You should respect requests for metadata from other plugins, as well; to see how
+to do that, refer to `src/dynamic-metadata/loader.py`.
 
 <!-- prettier-ignore-start -->
 [actions-badge]:            https://github.com/scikit-build/dynamic-metadata/workflows/CI/badge.svg
