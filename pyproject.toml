@@ -25,6 +25,7 @@ classifiers = [
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
   "Topic :: Scientific/Engineering",
   "Typing :: Typed",
 ]
@@ -99,7 +100,7 @@ disallow_untyped_defs = true
 disallow_incomplete_defs = true
 
 [[tool.mypy.overrides]]
-module = "setuptools_scm"
+module = ["setuptools_scm"]
 ignore_missing_imports = true
 
 
@@ -151,4 +152,5 @@ messages_control.disable = [
   "missing-function-docstring",
   "import-outside-toplevel",
   "invalid-name",
+  "unused-argument",  # Ruff
 ]
