@@ -1,16 +1,23 @@
 from __future__ import annotations
 
+import dataclasses
 import importlib
 import sys
-from collections.abc import Generator, Iterable, Mapping
+from collections.abc import Iterator, Mapping
 from pathlib import Path
-from typing import Any, Protocol, Union, runtime_checkable
-
-from graphlib import TopologicalSorter
+from typing import TYPE_CHECKING, Any, Protocol, Union, runtime_checkable
 
 from .info import ALL_FIELDS
 
-__all__ = ["load_dynamic_metadata", "load_provider"]
+if TYPE_CHECKING:
+    from collections.abc import Generator, Iterable
+
+    StrMapping = Mapping[str, Any]
+else:
+    StrMapping = Mapping
+
+
+__all__ = ["load_dynamic_metadata", "load_provider", "process_dynamic_metadata"]
 
 
 def __dir__() -> list[str]:
@@ -38,20 +45,10 @@ class DynamicMetadataWheelProtocol(DynamicMetadataProtocol, Protocol):
     ) -> bool: ...
 
 
-@runtime_checkable
-class DynamicMetadataNeeds(DynamicMetadataProtocol, Protocol):
-    def dynamic_metadata_needs(
-        self,
-        field: str,
-        settings: Mapping[str, object] | None = None,
-    ) -> list[str]: ...
-
-
 DMProtocols = Union[
     DynamicMetadataProtocol,
     DynamicMetadataRequirementsProtocol,
     DynamicMetadataWheelProtocol,
-    DynamicMetadataNeeds,
 ]
 
 
@@ -73,11 +70,9 @@ def load_provider(
         sys.path.pop(0)
 
 
-def _load_dynamic_metadata(
+def load_dynamic_metadata(
     metadata: Mapping[str, Mapping[str, str]],
-) -> Generator[
-    tuple[str, DMProtocols | None, dict[str, str], frozenset[str]], None, None
-]:
+) -> Generator[tuple[str, DMProtocols | None, dict[str, str]], None, None]:
     for field, orig_config in metadata.items():
         if "provider" in orig_config:
             if field not in ALL_FIELDS:
@@ -87,27 +82,73 @@ def _load_dynamic_metadata(
             provider = config.pop("provider")
             provider_path = config.pop("provider-path", None)
             loaded_provider = load_provider(provider, provider_path)
-            needs = frozenset(
-                loaded_provider.dynamic_metadata_needs(field, config)
-                if isinstance(loaded_provider, DynamicMetadataNeeds)
-                else []
-            )
-            if needs > ALL_FIELDS:
-                msg = f"Invalid dyanmic_metada_needs: {needs - ALL_FIELDS}"
-                raise KeyError(msg)
-            yield field, loaded_provider, config, needs
+            yield field, loaded_provider, config
         else:
-            yield field, None, dict(orig_config), frozenset()
+            yield field, None, dict(orig_config)
 
 
-def load_dynamic_metadata(
+@dataclasses.dataclass
+class DynamicPyProject(StrMapping):
+    settings: dict[str, dict[str, Any]]
+    project: dict[str, Any]
+    providers: dict[str, DMProtocols]
+
+    def __getitem__(self, key: str) -> Any:
+        # Try to get the settings from either the static file or dynamic metadata provider
+        if key in self.project:
+            return self.project[key]
+
+        # Check if we are in a loop, i.e. something else is already requesting
+        # this key while trying to get another key
+        if key not in self.providers:
+            dep_type = "missing" if key in self.settings else "circular"
+            msg = f"Encountered a {dep_type} dependency at {key}"
+            raise ValueError(msg)
+
+        provider = self.providers.pop(key)
+        self.project[key] = provider.dynamic_metadata(
+            key, self.settings[key], self.project
+        )
+        self.project["dynamic"].remove(key)
+
+        return self.project[key]
+
+    def __iter__(self) -> Iterator[str]:
+        # Iterate over the keys of the static settings
+        yield from self.project
+
+        # Iterate over the keys of the dynamic metadata providers
+        yield from self.providers
+
+    def __len__(self) -> int:
+        return len(self.project) + len(self.providers)
+
+    def __contains__(self, key: object) -> bool:
+        return key in self.project or key in self.providers
+
+
+def process_dynamic_metadata(
+    project: Mapping[str, Any],
     metadata: Mapping[str, Mapping[str, str]],
-) -> list[tuple[str, DMProtocols | None, dict[str, str]]]:
-    initial = {f: (p, c, n) for (f, p, c, n) in _load_dynamic_metadata(metadata)}
+) -> dict[str, Any]:
+    """Process dynamic metadata.
 
-    dynamic_fields = initial.keys()
-    sorter = TopologicalSorter(
-        {f: n & dynamic_fields for f, (_, _, n) in initial.items()}
+    This function loads the dynamic metadata providers and calls them to
+    generate the dynamic metadata. It takes the original project table and
+    returns a new project table. Empty providers are not supported; you
+    need to implement this yourself for now if you support that.
+    """
+
+    initial = {f: (p, s) for (f, p, s) in load_dynamic_metadata(metadata)}
+    for f, (p, _) in initial.items():
+        if p is None:
+            msg = f"{f} does not have a provider"
+            raise KeyError(msg)
+
+    settings = DynamicPyProject(
+        settings={f: s for f, (p, s) in initial.items() if p is not None},
+        project=dict(project),
+        providers={k: p for k, (p, _) in initial.items() if p is not None},
     )
-    order = sorter.static_order()
-    return [(f, *initial[f][:2]) for f in order]
+
+    return dict(settings)

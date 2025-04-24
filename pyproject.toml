@@ -32,7 +32,6 @@ classifiers = [
 dynamic = ["version"]
 dependencies = [
   "typing_extensions >=4.6; python_version<'3.11'",
-  "graphlib_backport >=1; python_version<'3.9'",
 ]
 
 [project.urls]
@@ -101,7 +100,7 @@ disallow_untyped_defs = true
 disallow_incomplete_defs = true
 
 [[tool.mypy.overrides]]
-module = ["setuptools_scm", "graphlib"]
+module = ["setuptools_scm"]
 ignore_missing_imports = true
 
 
