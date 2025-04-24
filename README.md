@@ -15,7 +15,7 @@ https://github.com/scikit-build/scikit-build-core/issues/230.
 
 > [!WARNING]
 >
-> This plugin is still a WiP!
+> This is still a WiP! The design may still change.
 
 ## For users
 
@@ -64,16 +64,16 @@ needs to have a `"value"` named group (`?P<value>`), which it will set.
 
 **You do not need to depend on dynamic-metadata to write a plugin.** This
 library provides testing and static typing helpers that are not needed at
-runtime.
+runtime, along with a reference implementation that you can either use as
+an example, or use directly if you are fine to require the dependency.
 
 Like PEP 517's hooks, `dynamic-metadata` defines a set of hooks that you can
 implement; one required hook and two optional hooks. The required hook is:
 
 ```python
 def dynamic_metadata(
-    field: str,
-    settings: dict[str, object] | None = None,
-) -> str | dict[str, str | None]: ...  # return the value of the metadata
+    field: str, settings: Mapping[str, Any], project: Mapping[str, Any]
+) -> str | dict[str, Any]: ...  # return the value of the metadata
 ```
 
 The backend will call this hook in the same directory as PEP 517's hooks.
@@ -84,7 +84,8 @@ A plugin can return METADATA 2.2 dynamic status:
 
 ```python
 def dynamic_wheel(
-    field: str, settings: Mapping[str, Any] | None = None
+    field: str,
+    settings: Mapping[str, Any],
 ) -> (
     bool
 ): ...  # Return true if metadata can change from SDist to wheel (METADATA 2.2 feature)
@@ -98,7 +99,7 @@ A plugin can also decide at runtime if it needs extra dependencies:
 
 ```python
 def get_requires_for_dynamic_metadata(
-    settings: Mapping[str, Any] | None = None,
+    settings: Mapping[str, Any],
 ) -> list[str]: ...  # return list of packages to require
 ```
 
@@ -113,6 +114,7 @@ Here is the regex plugin example implementation:
 def dynamic_metadata(
     field: str,
     settings: Mapping[str, Any],
+    _project: Mapping[str, Any],
 ) -> str:
     # Input validation
     if field not in {"version", "description", "requires-python"}:
@@ -147,36 +149,9 @@ library provides some helper functions you can use if you want, but you can
 implement them yourself following the standard provided or vendor the helper
 file (which will be tested and supported).
 
-You should collect the contents of `tool.dynamic-metadata` and load each,
-something like this:
-
-```python
-def load_provider(
-    provider: str,
-    provider_path: str | None = None,
-) -> DynamicMetadataProtocol:
-    if provider_path is None:
-        return importlib.import_module(provider)
-
-    if not Path(provider_path).is_dir():
-        msg = "provider-path must be an existing directory"
-        raise AssertionError(msg)
-
-    try:
-        sys.path.insert(0, provider_path)
-        return importlib.import_module(provider)
-    finally:
-        sys.path.pop(0)
-
-
-for dynamic_metadata in settings.metadata.values():
-    if "provider" in dynamic_metadata:
-        config = dynamic_metadata.copy()
-        provider = config.pop("provider")
-        provider_path = config.pop("provider-path", None)
-        module = load_provider(provider, provider_path)
-        # Run hooks from module
-```
+You should collect the contents of `tool.dynamic-metadata` and load each one.
+You should respect requests for metadata from other plugins, as well; to see
+how to do that, refer to `src/dynamic-metadata/loader.py`.
 
 <!-- prettier-ignore-start -->
 [actions-badge]:            https://github.com/scikit-build/dynamic-metadata/workflows/CI/badge.svg

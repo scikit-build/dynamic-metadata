@@ -27,7 +27,10 @@ def __dir__() -> list[str]:
 @runtime_checkable
 class DynamicMetadataProtocol(Protocol):
     def dynamic_metadata(
-        self, fields: Iterable[str], settings: dict[str, Any], metadata: dict[str, Any]
+        self,
+        fields: Iterable[str],
+        settings: dict[str, Any],
+        project: Mapping[str, Any],
     ) -> dict[str, Any]: ...
 
 
@@ -40,9 +43,7 @@ class DynamicMetadataRequirementsProtocol(DynamicMetadataProtocol, Protocol):
 
 @runtime_checkable
 class DynamicMetadataWheelProtocol(DynamicMetadataProtocol, Protocol):
-    def dynamic_wheel(
-        self, field: str, settings: Mapping[str, Any] | None = None
-    ) -> bool: ...
+    def dynamic_wheel(self, field: str, settings: Mapping[str, Any]) -> bool: ...
 
 
 DMProtocols = Union[
@@ -71,7 +72,7 @@ def load_provider(
 
 
 def load_dynamic_metadata(
-    metadata: Mapping[str, Mapping[str, str]],
+    metadata: Mapping[str, Mapping[str, Any]],
 ) -> Generator[tuple[str, DMProtocols | None, dict[str, str]], None, None]:
     for field, orig_config in metadata.items():
         if "provider" in orig_config:
@@ -106,19 +107,14 @@ class DynamicPyProject(StrMapping):
             raise ValueError(msg)
 
         provider = self.providers.pop(key)
-        self.project[key] = provider.dynamic_metadata(
-            key, self.settings[key], self.project
-        )
+        self.project[key] = provider.dynamic_metadata(key, self.settings[key], self)
         self.project["dynamic"].remove(key)
 
         return self.project[key]
 
     def __iter__(self) -> Iterator[str]:
         # Iterate over the keys of the static settings
-        yield from self.project
-
-        # Iterate over the keys of the dynamic metadata providers
-        yield from self.providers
+        yield from [*self.project.keys(), *self.providers.keys()]
 
     def __len__(self) -> int:
         return len(self.project) + len(self.providers)
@@ -129,7 +125,7 @@ class DynamicPyProject(StrMapping):
 
 def process_dynamic_metadata(
     project: Mapping[str, Any],
-    metadata: Mapping[str, Mapping[str, str]],
+    metadata: Mapping[str, Mapping[str, Any]],
 ) -> dict[str, Any]:
     """Process dynamic metadata.
 

@@ -23,7 +23,7 @@ def _process_dynamic_metadata(field: str, action: Callable[[str], str], result: 
             msg = f"Field {field!r} must be a list of strings"
             raise RuntimeError(msg)
         return [action(r) for r in result]  # type: ignore[return-value]
-    if field in DICT_STR_FIELDS:
+    if field in DICT_STR_FIELDS | {"readme"}:
         if not isinstance(result, dict) or not all(
             isinstance(v, str) for v in result.values()
         ):

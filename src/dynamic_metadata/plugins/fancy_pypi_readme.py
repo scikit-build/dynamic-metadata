@@ -7,7 +7,6 @@ from .._compat import tomllib
 
 __all__ = [
     "dynamic_metadata",
-    "dynamic_requires_needs",
     "get_requires_for_dynamic_metadata",
 ]
 
@@ -19,7 +18,7 @@ def __dir__() -> list[str]:
 def dynamic_metadata(
     field: str,
     settings: dict[str, list[str] | str],
-    metadata: Mapping[str, Any],
+    project: Mapping[str, Any],
 ) -> dict[str, str | None]:
     from hatch_fancy_pypi_readme._builder import build_text
     from hatch_fancy_pypi_readme._config import load_and_validate_config
@@ -42,7 +41,7 @@ def dynamic_metadata(
     if hasattr(config, "substitutions"):
         try:
             text = build_text(
-                config.fragments, config.substitutions, metadata["version"]
+                config.fragments, config.substitutions, project["version"]
             )
         except TypeError:
             # Version 23.2.0 and before don't have a version field
@@ -63,10 +62,3 @@ def get_requires_for_dynamic_metadata(
     _settings: dict[str, object] | None = None,
 ) -> list[str]:
     return ["hatch-fancy-pypi-readme>=22.3"]
-
-
-def dynamic_requires_needs(
-    _field: str,
-    _settings: dict[str, object],
-) -> list[str]:
-    return ["version"]

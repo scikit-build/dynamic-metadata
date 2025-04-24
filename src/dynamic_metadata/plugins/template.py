@@ -7,20 +7,20 @@ if TYPE_CHECKING:
 
 from . import _process_dynamic_metadata
 
-__all__ = ["dynamic_metadata", "dynamic_metadata_needs"]
+__all__ = ["dynamic_metadata"]
 
 
 def __dir__() -> list[str]:
     return __all__
 
 
-KEYS = {"needs", "result"}
+KEYS = {"result"}
 
 
 def dynamic_metadata(
     field: str,
     settings: Mapping[str, str | list[str] | dict[str, str] | dict[str, list[str]]],
-    metadata: Mapping[str, Any],
+    project: Mapping[str, Any],
 ) -> str | list[str] | dict[str, str] | dict[str, list[str]]:
     if settings.keys() > KEYS:
         msg = f"Only {KEYS} settings allowed by this plugin"
@@ -34,13 +34,6 @@ def dynamic_metadata(
 
     return _process_dynamic_metadata(
         field,
-        lambda r: r.format(**metadata),
+        lambda r: r.format(project=project),
         result,
     )
-
-
-def dynamic_metadata_needs(
-    field: str,  # noqa: ARG001
-    settings: Mapping[str, Any],
-) -> list[str]:
-    return settings.get("needs", [])

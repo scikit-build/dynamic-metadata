@@ -30,7 +30,7 @@ def _process(match: re.Match[str], remove: str, result: str) -> str:
 def dynamic_metadata(
     field: str,
     settings: Mapping[str, Any],
-    _metadata: Mapping[str, Any],
+    _project: Mapping[str, Any],
 ) -> str:
     # Input validation
     if settings.keys() > KEYS:
