@@ -52,7 +52,6 @@ def test_template_entry_points() -> None:
     pyproject = dynamic_metadata.loader.process_dynamic_metadata(
         {
             "name": "test",
-            "version": "0.1.0",
             "dynamic": ["version", "entry-points"],
         },
         {
