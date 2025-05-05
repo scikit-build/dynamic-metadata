@@ -48,6 +48,28 @@ def test_template_needs() -> None:
     assert pyproject["requires-python"] == ">=0.1.0"
 
 
+def test_template_entry_points() -> None:
+    pyproject = dynamic_metadata.loader.process_dynamic_metadata(
+        {
+            "name": "test",
+            "version": "0.1.0",
+            "dynamic": ["version", "entry-points"],
+        },
+        {
+            "version": {
+                "provider": "dynamic_metadata.plugins.template",
+                "result": "1.2.3",
+            },
+            "entry-points": {
+                "provider": "dynamic_metadata.plugins.template",
+                "result": {"my_point": "my_app:script_{project[version]}"},
+            },
+        },
+    )
+
+    assert pyproject["entry-points"] == {"my_point": "my_app:script_1.2.3"}
+
+
 def test_regex() -> None:
     pyproject = dynamic_metadata.loader.process_dynamic_metadata(
         {
