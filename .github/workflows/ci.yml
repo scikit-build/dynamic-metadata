@@ -57,6 +57,8 @@ jobs:
             runs-on: ubuntu-latest
           - python-version: "3.8"
             runs-on: ubuntu-latest
+          - python-version: "3.14t"
+            runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
