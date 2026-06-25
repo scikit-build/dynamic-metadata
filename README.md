@@ -119,7 +119,7 @@ def dynamic_metadata(
     # Input validation
     if field not in {"version", "description", "requires-python"}:
         raise RuntimeError("Only string fields supported by this plugin")
-    if settings > {"input", "regex"}:
+    if settings.keys() - {"input", "regex"}:
         raise RuntimeError("Only 'input' and 'regex' settings allowed by this plugin")
     if "input" not in settings:
         raise RuntimeError("Must contain the 'input' setting to perform a regex on")
