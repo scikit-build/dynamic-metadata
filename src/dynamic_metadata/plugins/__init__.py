@@ -25,35 +25,35 @@ def _process_dynamic_metadata(field: str, action: Callable[[str], str], result: 
         if not (isinstance(result, list) and all(isinstance(r, str) for r in result)):
             msg = f"Field {field!r} must be a list of strings"
             raise RuntimeError(msg)
-        return [action(r) for r in result]  # type: ignore[return-value]
+        return [action(r) for r in result]  # type: ignore[return-value, arg-type]
     if field in DICT_STR_FIELDS | {"readme"}:
         if not isinstance(result, dict) or not all(
             isinstance(v, str) for v in result.values()
         ):
             msg = f"Field {field!r} must be a dictionary of strings"
             raise RuntimeError(msg)
-        return {action(k): action(v) for k, v in result.items()}  # type: ignore[return-value]
+        return {action(k): action(v) for k, v in result.items()}  # type: ignore[return-value, arg-type]
     if field in LIST_DICT_FIELDS:
         if not isinstance(result, list) or not all(
             isinstance(k, str) and isinstance(v, str)
             for d in result
-            for k, v in d.items()
+            for k, v in d.items()  # type: ignore[union-attr]
         ):
             msg = f"Field {field!r} must be a dictionary of strings"
             raise RuntimeError(msg)
-        return [{k: action(v) for k, v in d.items()} for d in result]  # type: ignore[return-value]
+        return [{k: action(v) for k, v in d.items()} for d in result]  # type: ignore[return-value, union-attr]
     if field == "entry-points":
         if not isinstance(result, dict) or not all(
             isinstance(d, dict)
-            and all(isinstance(k, str) and isinstance(v, str) for k, v in d.items())
+            and all(isinstance(k, str) and isinstance(v, str) for k, v in d.items())  # type: ignore[redundant-expr]
             for d in result.values()
         ):
             msg = "Field 'entry-points' must be a dictionary of dictionary of strings"
             raise RuntimeError(msg)
-        return {
-            dk: {action(k): action(v) for k, v in dv.items()}
+        return {  # type: ignore[return-value]
+            dk: {action(k): action(v) for k, v in dv.items()}  # type: ignore[union-attr]
             for dk, dv in result.items()
-        }  # type: ignore[return-value]
+        }
     if field == "optional-dependencies":
         if not isinstance(result, dict) or not all(
             isinstance(v, list) for v in result.values()
