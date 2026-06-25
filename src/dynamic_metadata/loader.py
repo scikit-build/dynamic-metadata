@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any, Protocol, Union, runtime_checkable
 from .info import ALL_FIELDS
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Iterable
+    from collections.abc import Generator
 
     StrMapping = Mapping[str, Any]
 else:
@@ -28,10 +28,10 @@ def __dir__() -> list[str]:
 class DynamicMetadataProtocol(Protocol):
     def dynamic_metadata(
         self,
-        fields: Iterable[str],
+        field: str,
         settings: dict[str, Any],
         project: Mapping[str, Any],
-    ) -> dict[str, Any]: ...
+    ) -> Any: ...
 
 
 @runtime_checkable
@@ -135,16 +135,19 @@ def process_dynamic_metadata(
     need to implement this yourself for now if you support that.
     """
 
-    initial = {f: (p, s) for (f, p, s) in load_dynamic_metadata(metadata)}
-    for f, (p, _) in initial.items():
-        if p is None:
-            msg = f"{f} does not have a provider"
+    settings: dict[str, dict[str, Any]] = {}
+    providers: dict[str, DMProtocols] = {}
+    for field, provider, config in load_dynamic_metadata(metadata):
+        if provider is None:
+            msg = f"{field} does not have a provider"
             raise KeyError(msg)
+        settings[field] = config
+        providers[field] = provider
 
-    settings = DynamicPyProject(
-        settings={f: s for f, (p, s) in initial.items() if p is not None},
+    dynamic = DynamicPyProject(
+        settings=settings,
         project=dict(project),
-        providers={k: p for k, (p, _) in initial.items() if p is not None},
+        providers=providers,
     )
 
-    return dict(settings)
+    return dict(dynamic)

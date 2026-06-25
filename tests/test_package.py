@@ -98,6 +98,20 @@ def test_regex() -> None:
     assert pyproject["requires-python"] == ">=dynamic-metadata"
 
 
+def test_regex_rejects_unknown_setting() -> None:
+    with pytest.raises(RuntimeError, match="settings allowed"):
+        dynamic_metadata.loader.process_dynamic_metadata(
+            {"name": "test", "version": "0.1.0", "dynamic": ["requires-python"]},
+            {
+                "requires-python": {
+                    "provider": "dynamic_metadata.plugins.regex",
+                    "input": "pyproject.toml",
+                    "typo": "oops",
+                },
+            },
+        )
+
+
 @pytest.mark.parametrize(
     ("field", "input", "output"),
     [
