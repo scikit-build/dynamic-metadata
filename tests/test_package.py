@@ -1,11 +1,39 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import pytest
 
 import dynamic_metadata.loader
 import dynamic_metadata.plugins
+
+
+def test_load_provider_path_loads_local(tmp_path: Path) -> None:
+    plugin_dir = tmp_path / "plugins"
+    plugin_dir.mkdir()
+    (plugin_dir / "local_prov_ok.py").write_text(
+        "def dynamic_metadata(field, settings, project):\n    return '1.2.3'\n"
+    )
+
+    provider = dynamic_metadata.loader.load_provider("local_prov_ok", str(plugin_dir))
+    assert provider.dynamic_metadata("version", {}, {}) == "1.2.3"
+
+
+def test_load_provider_path_not_shadowed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A same-named module reachable via the normal sys.path ...
+    other = tmp_path / "other"
+    other.mkdir()
+    (other / "shadow_prov.py").write_text("WRONG = True\n")
+    monkeypatch.syspath_prepend(str(other))
+
+    # ... must not satisfy a provider-path request that does not contain it.
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    with pytest.raises(ModuleNotFoundError):
+        dynamic_metadata.loader.load_provider("shadow_prov", str(empty))
 
 
 def test_template_basic() -> None:
