@@ -140,6 +140,85 @@ def test_regex_rejects_unknown_setting() -> None:
         )
 
 
+def test_pep808_extends_static_dependencies() -> None:
+    # PEP 808: a field may be both static and dynamic; the provider only adds.
+    pyproject = dynamic_metadata.loader.process_dynamic_metadata(
+        {
+            "name": "test",
+            "version": "1.2.3",
+            "dependencies": ["torch", "packaging"],
+            "dynamic": ["dependencies"],
+        },
+        {
+            "dependencies": {
+                "provider": "dynamic_metadata.plugins.template",
+                "result": ["numpy>={project[version]}"],
+            },
+        },
+    )
+
+    # Static entries are preserved and ordered first; the provider's additions
+    # are appended verbatim.
+    assert pyproject["dependencies"] == ["torch", "packaging", "numpy>=1.2.3"]
+    assert pyproject["dynamic"] == []
+
+
+@pytest.mark.parametrize(
+    ("field", "static", "dynamic", "output"),
+    [
+        pytest.param(
+            "classifiers",
+            ["A", "A"],
+            ["A", "B"],
+            ["A", "A", "A", "B"],
+            id="list-str",
+        ),
+        pytest.param(
+            "urls",
+            {"Home": "h"},
+            {"Docs": "d"},
+            {"Home": "h", "Docs": "d"},
+            id="dict-str",
+        ),
+        pytest.param(
+            "authors",
+            [{"name": "a"}],
+            [{"name": "b"}],
+            [{"name": "a"}, {"name": "b"}],
+            id="list-dict",
+        ),
+        pytest.param(
+            "optional-dependencies",
+            {"dev": ["pytest"]},
+            {"dev": ["mypy"], "docs": ["sphinx"]},
+            {"dev": ["pytest", "mypy"], "docs": ["sphinx"]},
+            id="optional-dependencies",
+        ),
+        pytest.param(
+            "entry-points",
+            {"grp": {"a": "x"}},
+            {"grp": {"b": "y"}, "other": {"c": "z"}},
+            {"grp": {"a": "x", "b": "y"}, "other": {"c": "z"}},
+            id="entry-points",
+        ),
+    ],
+)
+def test_merge_metadata(field: str, static: Any, dynamic: Any, output: Any) -> None:
+    assert dynamic_metadata.loader._merge_metadata(field, static, dynamic) == output
+
+
+def test_merge_metadata_rejects_string_field() -> None:
+    with pytest.raises(ValueError, match="both statically and dynamically"):
+        dynamic_metadata.loader._merge_metadata("version", "1.0", "2.0")
+
+
+def test_merge_metadata_rejects_modifying_existing_key() -> None:
+    with pytest.raises(ValueError, match="may not modify existing key"):
+        dynamic_metadata.loader._merge_metadata(
+            "scripts", {"cli": "pkg:main"}, {"cli": "pkg:other"}
+        )
+
+
 @pytest.mark.parametrize(
     ("field", "input", "output"),
     [

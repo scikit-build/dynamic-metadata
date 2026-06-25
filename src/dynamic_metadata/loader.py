@@ -9,7 +9,13 @@ from collections.abc import Iterator, Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol, Union, runtime_checkable
 
-from .info import ALL_FIELDS
+from .info import (
+    ALL_FIELDS,
+    DICT_STR_FIELDS,
+    EXTENDABLE_FIELDS,
+    LIST_DICT_FIELDS,
+    LIST_STR_FIELDS,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Sequence
@@ -92,6 +98,51 @@ class _ProviderPathFinder(importlib.abc.MetaPathFinder):
         return spec
 
 
+def _merge_dict(
+    field: str, base: Mapping[str, Any], additions: Mapping[str, Any]
+) -> dict[str, Any]:
+    """Add new keys to a table; a provider may not change existing values."""
+    merged = dict(base)
+    for key, value in additions.items():
+        if key in merged and merged[key] != value:
+            msg = f"Provider for {field!r} may not modify existing key {key!r}"
+            raise ValueError(msg)
+        merged[key] = value
+    return merged
+
+
+def _merge_metadata(field: str, static: Any, dynamic: Any) -> Any:
+    """Merge a static value with a provider's additions (PEP 808).
+
+    Existing static entries are preserved as-is and kept first; the provider's
+    value is appended after them. Lists are concatenated verbatim, so a provider
+    should return only its additions and may add a value already present.
+    """
+    if field not in EXTENDABLE_FIELDS:
+        msg = f"Field {field!r} cannot be given both statically and dynamically"
+        raise ValueError(msg)
+
+    if field in LIST_STR_FIELDS or field in LIST_DICT_FIELDS:
+        return [*static, *dynamic]
+
+    if field in DICT_STR_FIELDS:
+        return _merge_dict(field, static, dynamic)
+
+    if field == "optional-dependencies":
+        merged_extras = {extra: list(deps) for extra, deps in static.items()}
+        for extra, deps in dynamic.items():
+            merged_extras.setdefault(extra, []).extend(deps)
+        return merged_extras
+
+    # entry-points: a table of groups, each a table of name -> object reference
+    merged_groups = {group: dict(eps) for group, eps in static.items()}
+    for group, eps in dynamic.items():
+        merged_groups[group] = _merge_dict(
+            f"entry-points group {group!r}", merged_groups.get(group, {}), eps
+        )
+    return merged_groups
+
+
 def load_provider(
     provider: str,
     provider_path: str | None = None,
@@ -135,8 +186,10 @@ class DynamicPyProject(StrMapping):
     providers: dict[str, DMProtocols]
 
     def __getitem__(self, key: str) -> Any:
-        # Try to get the settings from either the static file or dynamic metadata provider
-        if key in self.project:
+        # Static-only fields, and providers that have already resolved, are
+        # returned as-is. A PEP 808 field is in both project and providers, so
+        # the second check keeps it on the resolution path the first time.
+        if key in self.project and key not in self.providers:
             return self.project[key]
 
         # Check if we are in a loop, i.e. something else is already requesting
@@ -147,17 +200,27 @@ class DynamicPyProject(StrMapping):
             raise ValueError(msg)
 
         provider = self.providers.pop(key)
-        self.project[key] = provider.dynamic_metadata(key, self.settings[key], self)
+        result = provider.dynamic_metadata(key, self.settings[key], self)
+        if key in self.project:
+            # PEP 808: the field is given both statically and dynamically, so
+            # the provider's result only adds to the static portion.
+            result = _merge_metadata(key, self.project[key], result)
+        self.project[key] = result
         self.project["dynamic"].remove(key)
 
         return self.project[key]
 
     def __iter__(self) -> Iterator[str]:
-        # Iterate over the keys of the static settings
-        yield from [*self.project.keys(), *self.providers.keys()]
+        # Iterate over static and provider keys, without repeating a PEP 808
+        # field that appears in both.
+        seen: set[str] = set()
+        for key in (*self.project, *self.providers):
+            if key not in seen:
+                seen.add(key)
+                yield key
 
     def __len__(self) -> int:
-        return len(self.project) + len(self.providers)
+        return len(self.project.keys() | self.providers.keys())
 
     def __contains__(self, key: object) -> bool:
         return key in self.project or key in self.providers
