@@ -31,6 +31,7 @@ def dynamic_metadata(
     field: str,
     settings: Mapping[str, Any],
     _project: Mapping[str, Any],
+    _build_state: str,
 ) -> str:
     # Input validation
     if settings.keys() - KEYS:

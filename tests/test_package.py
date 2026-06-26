@@ -13,11 +13,12 @@ def test_load_provider_path_loads_local(tmp_path: Path) -> None:
     plugin_dir = tmp_path / "plugins"
     plugin_dir.mkdir()
     (plugin_dir / "local_prov_ok.py").write_text(
-        "def dynamic_metadata(field, settings, project):\n    return '1.2.3'\n"
+        "def dynamic_metadata(field, settings, project, build_state):\n"
+        "    return '1.2.3'\n"
     )
 
     provider = dynamic_metadata.loader.load_provider("local_prov_ok", str(plugin_dir))
-    assert provider.dynamic_metadata("version", {}, {}) == "1.2.3"
+    assert provider.dynamic_metadata("version", {}, {}, "wheel") == "1.2.3"
 
 
 def test_load_provider_path_not_shadowed(
@@ -49,6 +50,7 @@ def test_template_basic() -> None:
                 "result": ">={project[version]}",
             },
         },
+        "wheel",
     )
 
     assert pyproject["requires-python"] == ">=0.1.0"
@@ -76,6 +78,7 @@ def test_template_needs() -> None:
                 "result": ">={project[version]}",
             },
         },
+        "wheel",
     )
 
     assert pyproject["requires-python"] == ">=0.1.0"
@@ -99,6 +102,7 @@ def test_template_entry_points() -> None:
                 },
             },
         },
+        "wheel",
     )
 
     assert pyproject["entry-points"] == {
@@ -121,6 +125,7 @@ def test_regex() -> None:
                 "result": ">={name}",
             },
         },
+        "wheel",
     )
 
     assert pyproject["requires-python"] == ">=dynamic-metadata"
@@ -137,6 +142,45 @@ def test_regex_rejects_unknown_setting() -> None:
                     "typo": "oops",
                 },
             },
+            "wheel",
+        )
+
+
+def test_build_state_passed_to_provider(tmp_path: Path) -> None:
+    # The backend's build_state string reaches the provider and can drive its
+    # result: recompute for sdist/wheel, reuse a precomputed value otherwise.
+    plugin_dir = tmp_path / "plugins"
+    plugin_dir.mkdir()
+    (plugin_dir / "build_state_prov.py").write_text(
+        "def dynamic_metadata(field, settings, project, build_state):\n"
+        "    if build_state in {'sdist', 'wheel'}:\n"
+        "        return 'computed'\n"
+        "    return 'reused'\n"
+    )
+
+    def run(build_state: dynamic_metadata.loader.BuildState) -> Any:
+        return dynamic_metadata.loader.process_dynamic_metadata(
+            {"name": "test", "dynamic": ["version"]},
+            {
+                "version": {
+                    "provider": "build_state_prov",
+                    "provider-path": str(plugin_dir),
+                },
+            },
+            build_state,
+        )["version"]
+
+    assert run("sdist") == "computed"
+    assert run("wheel") == "computed"
+    assert run("metadata_wheel") == "reused"
+
+
+def test_build_state_rejects_unknown_value() -> None:
+    with pytest.raises(ValueError, match="build_state must be one of"):
+        dynamic_metadata.loader.process_dynamic_metadata(
+            {"name": "test", "version": "0.1.0"},
+            {},
+            "bdist",  # type: ignore[arg-type]
         )
 
 
@@ -155,6 +199,7 @@ def test_pep808_extends_static_dependencies() -> None:
                 "result": ["numpy>={project[version]}"],
             },
         },
+        "wheel",
     )
 
     # Static entries are preserved and ordered first; the provider's additions
@@ -177,6 +222,7 @@ def test_pep808_provider_reads_own_static() -> None:
                 "result": ["saw:{project[dependencies]}"],
             },
         },
+        "wheel",
     )
 
     assert pyproject["dependencies"] == ["a", "b", "saw:['a', 'b']"]
@@ -203,6 +249,7 @@ def test_pep808_circular_dependency_detected() -> None:
                     "result": ["{project[dependencies]}"],
                 },
             },
+            "wheel",
         )
 
 
@@ -218,6 +265,7 @@ def test_missing_dependency_detected() -> None:
                     "result": ">={project[nonexistent]}",
                 },
             },
+            "wheel",
         )
 
 

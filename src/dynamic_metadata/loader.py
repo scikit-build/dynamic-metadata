@@ -7,7 +7,15 @@ import importlib.machinery
 import sys
 from collections.abc import Iterator, Mapping
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Protocol, Union, runtime_checkable
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Literal,
+    Protocol,
+    Union,
+    get_args,
+    runtime_checkable,
+)
 
 from .info import (
     ALL_FIELDS,
@@ -16,6 +24,11 @@ from .info import (
     LIST_DICT_FIELDS,
     LIST_STR_FIELDS,
 )
+
+BuildState = Literal[
+    "sdist", "wheel", "editable", "metadata_wheel", "metadata_editable"
+]
+BUILD_STATES: frozenset[str] = frozenset(get_args(BuildState))
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Sequence
@@ -27,7 +40,12 @@ else:
     StrMapping = Mapping
 
 
-__all__ = ["load_dynamic_metadata", "load_provider", "process_dynamic_metadata"]
+__all__ = [
+    "BuildState",
+    "load_dynamic_metadata",
+    "load_provider",
+    "process_dynamic_metadata",
+]
 
 
 def __dir__() -> list[str]:
@@ -41,6 +59,7 @@ class DynamicMetadataProtocol(Protocol):
         field: str,
         settings: dict[str, Any],
         project: Mapping[str, Any],
+        build_state: BuildState,
     ) -> Any: ...
 
 
@@ -184,6 +203,7 @@ class DynamicPyProject(StrMapping):
     settings: dict[str, dict[str, Any]]
     project: dict[str, Any]
     providers: dict[str, DMProtocols]
+    build_state: BuildState
     # Stack of fields whose providers are currently running, innermost last.
     _resolving: list[str] = dataclasses.field(default_factory=list)
 
@@ -214,7 +234,9 @@ class DynamicPyProject(StrMapping):
         provider = self.providers.pop(key)
         self._resolving.append(key)
         try:
-            result = provider.dynamic_metadata(key, self.settings[key], self)
+            result = provider.dynamic_metadata(
+                key, self.settings[key], self, self.build_state
+            )
         finally:
             self._resolving.pop()
         if key in self.project:
@@ -245,6 +267,7 @@ class DynamicPyProject(StrMapping):
 def process_dynamic_metadata(
     project: Mapping[str, Any],
     metadata: Mapping[str, Mapping[str, Any]],
+    build_state: BuildState,
 ) -> dict[str, Any]:
     """Process dynamic metadata.
 
@@ -252,7 +275,17 @@ def process_dynamic_metadata(
     generate the dynamic metadata. It takes the original project table and
     returns a new project table. Empty providers are not supported; you
     need to implement this yourself for now if you support that.
+
+    ``build_state`` is the backend's description of the current build, passed
+    through to each provider. It must be one of these build states
+    (``BUILD_STATES``): ``"sdist"``, ``"wheel"``, ``"editable"``,
+    ``"metadata_wheel"``, or ``"metadata_editable"``. Providers may use it or
+    ignore it.
     """
+
+    if build_state not in BUILD_STATES:
+        msg = f"build_state must be one of {sorted(BUILD_STATES)}, got {build_state!r}"
+        raise ValueError(msg)
 
     settings: dict[str, dict[str, Any]] = {}
     providers: dict[str, DMProtocols] = {}
@@ -267,6 +300,7 @@ def process_dynamic_metadata(
         settings=settings,
         project=dict(project),
         providers=providers,
+        build_state=build_state,
     )
 
     return dict(dynamic)

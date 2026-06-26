@@ -21,6 +21,7 @@ def dynamic_metadata(
     field: str,
     settings: Mapping[str, str | list[str] | dict[str, str] | dict[str, list[str]]],
     project: Mapping[str, Any],
+    _build_state: str,
 ) -> str | list[str] | dict[str, str] | dict[str, list[str]]:
     if settings.keys() - KEYS:
         msg = f"Only {KEYS} settings allowed by this plugin"

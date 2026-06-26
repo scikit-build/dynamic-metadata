@@ -103,11 +103,21 @@ implement; one required hook and two optional hooks. The required hook is:
 
 ```python
 def dynamic_metadata(
-    field: str, settings: Mapping[str, Any], project: Mapping[str, Any]
+    field: str,
+    settings: Mapping[str, Any],
+    project: Mapping[str, Any],
+    build_state: str,
 ) -> str | dict[str, Any]: ...  # return the value of the metadata
 ```
 
 The backend will call this hook in the same directory as PEP 517's hooks.
+
+`build_state` is a string the backend supplies describing the current build. It
+must be one of scikit-build-core's five build states: `"sdist"`, `"wheel"`,
+`"editable"`, `"metadata_wheel"`, or `"metadata_editable"` (the latter two are
+the `prepare_metadata_for_build_*` phases). A plugin may use it — for example to
+reuse a value already computed in an SDist's `PKG-INFO` instead of recomputing
+it for the wheel — or ignore it.
 
 There are two optional hooks.
 
@@ -146,6 +156,7 @@ def dynamic_metadata(
     field: str,
     settings: Mapping[str, Any],
     _project: Mapping[str, Any],
+    _build_state: str,
 ) -> str:
     # Input validation
     if field not in {"version", "description", "requires-python"}:
