@@ -163,6 +163,25 @@ def test_pep808_extends_static_dependencies() -> None:
     assert pyproject["dynamic"] == []
 
 
+def test_pep808_provider_reads_own_static() -> None:
+    # A provider may read the static value of the field it is extending.
+    pyproject = dynamic_metadata.loader.process_dynamic_metadata(
+        {
+            "name": "test",
+            "dependencies": ["a", "b"],
+            "dynamic": ["dependencies"],
+        },
+        {
+            "dependencies": {
+                "provider": "dynamic_metadata.plugins.template",
+                "result": ["saw:{project[dependencies]}"],
+            },
+        },
+    )
+
+    assert pyproject["dependencies"] == ["a", "b", "saw:['a', 'b']"]
+
+
 def test_pep808_circular_dependency_detected() -> None:
     # A static-and-dynamic field must not let its own static value satisfy a
     # re-entrant request while its provider is mid-resolution: the cycle below

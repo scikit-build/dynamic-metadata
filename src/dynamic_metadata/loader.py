@@ -184,12 +184,24 @@ class DynamicPyProject(StrMapping):
     settings: dict[str, dict[str, Any]]
     project: dict[str, Any]
     providers: dict[str, DMProtocols]
+    # Stack of fields whose providers are currently running, innermost last.
+    _resolving: list[str] = dataclasses.field(default_factory=list)
 
     def __getitem__(self, key: str) -> Any:
+        # PEP 808: a provider may read the static value of the field it is
+        # itself resolving (the innermost in-flight field) to decide what to
+        # add. Any other in-flight field is a circular dependency, handled below.
+        if self._resolving and self._resolving[-1] == key and key in self.project:
+            return self.project[key]
+
         # Static-only fields, and providers that have already resolved, are
-        # returned as-is. A PEP 808 field is in both project and providers, so
-        # the second check keeps it on the resolution path the first time.
-        if key in self.project and key not in self.providers:
+        # returned as-is. An in-flight field is excluded so a re-entrant request
+        # for it is not answered with its incomplete (static-only) value.
+        if (
+            key in self.project
+            and key not in self.providers
+            and key not in self._resolving
+        ):
             return self.project[key]
 
         # Check if we are in a loop, i.e. something else is already requesting
@@ -200,15 +212,15 @@ class DynamicPyProject(StrMapping):
             raise ValueError(msg)
 
         provider = self.providers.pop(key)
-        # PEP 808: the field may be given both statically and dynamically. Drop
-        # the static portion while the provider runs so a re-entrant request for
-        # this key still falls through to the circular-dependency check above
-        # instead of being silently answered with the incomplete static value.
-        had_static = key in self.project
-        static = self.project.pop(key, None)
-        result = provider.dynamic_metadata(key, self.settings[key], self)
-        if had_static:
-            result = _merge_metadata(key, static, result)
+        self._resolving.append(key)
+        try:
+            result = provider.dynamic_metadata(key, self.settings[key], self)
+        finally:
+            self._resolving.pop()
+        if key in self.project:
+            # PEP 808: the field is given both statically and dynamically, so
+            # the provider's result only adds to the static portion.
+            result = _merge_metadata(key, self.project[key], result)
         self.project[key] = result
         self.project["dynamic"].remove(key)
 

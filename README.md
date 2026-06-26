@@ -76,12 +76,14 @@ dynamic = ["dependencies"]
 provider = "..."
 ```
 
-The provider returns only its additions; the loader merges them with the static
-value, so the provider does not (and cannot, mid-resolution) read its own field
-back via `project[...]`. Static entries stay first and the provider's entries
-are appended verbatim. For tables (`urls`, `scripts`, `entry-points`,
-`optional-dependencies`, …) the provider may add keys but not change the value
-of an existing one.
+The provider returns only its additions; the loader merges them onto the static
+value, with static entries kept first and the provider's entries appended
+verbatim. A provider may read the static value of the field it is extending via
+`project[...]` (e.g. `project["dependencies"]`) to decide what to add —
+requesting any _other_ unresolved field works too, but requesting one whose own
+provider is still running is a circular dependency and raises. For tables
+(`urls`, `scripts`, `entry-points`, `optional-dependencies`, …) the provider may
+add keys but not change the value of an existing one.
 
 This applies to every list/table field; the single-value string fields
 (`version`, `description`, `requires-python`, `license`) and `readme` cannot be
