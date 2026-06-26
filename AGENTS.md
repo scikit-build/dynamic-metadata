@@ -3,9 +3,10 @@
 ## What this is
 
 A specification and reference implementation for **dynamic metadata plugins**
-for Python build backends, supporting scikit-build-core issue #230. It defines a
-plugin protocol that lets a build backend compute `[project]` fields (version,
-readme, dependencies, etc.) at build time. Design is still WiP and may change.
+for Python build backends, initially supporting scikit-build-core (see issue
+#230). It defines a plugin protocol that lets a build backend compute
+`[project]` fields (version, readme, dependencies, etc.) at build time. Design
+is still WiP and may change.
 
 The library is split into three audiences (see README.md):
 

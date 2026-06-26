@@ -25,8 +25,6 @@ from .info import (
     LIST_STR_FIELDS,
 )
 
-# Mirrors scikit-build-core's build states; the metadata phase is split by
-# target (``prepare_metadata_for_build_wheel`` / ``_build_editable``).
 BuildState = Literal[
     "sdist", "wheel", "editable", "metadata_wheel", "metadata_editable"
 ]
@@ -279,8 +277,8 @@ def process_dynamic_metadata(
     need to implement this yourself for now if you support that.
 
     ``build_state`` is the backend's description of the current build, passed
-    through to each provider. It must be one of scikit-build-core's build
-    states (``BUILD_STATES``): ``"sdist"``, ``"wheel"``, ``"editable"``,
+    through to each provider. It must be one of these build states
+    (``BUILD_STATES``): ``"sdist"``, ``"wheel"``, ``"editable"``,
     ``"metadata_wheel"``, or ``"metadata_editable"``. Providers may use it or
     ignore it.
     """
