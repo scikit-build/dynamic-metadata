@@ -19,20 +19,25 @@ https://github.com/scikit-build/scikit-build-core/issues/230.
 
 ## For users
 
-Every external plugin must specify a "provider", which is a module that provides
-the API listed in the next section.
+Plugins are configured as an **ordered array of tables**,
+`[[tool.dynamic-metadata]]`. Each entry must specify a `provider` (a module
+exposing the API in the next section); everything else in the entry is passed to
+that plugin as settings.
 
 ```toml
-[tool.dynamic-metadata.<field-name>]
+[[tool.dynamic-metadata]]
 provider = "<module>"
+# ... plugin settings ...
 ```
 
-There is an optional field: "provider-path", which specifies a local path to
-load a plugin from, allowing plugins to reside inside your own project.
+Entries run **in order**, so a later entry sees every field an earlier entry
+produced. This makes resolution order explicit (no dependency graph), lets you
+modify one field with several plugins, and means a plugin can read another
+field's value simply with `project[...]`.
 
-All other fields are passed on to the plugin, allowing plugins to specify custom
-configuration per field. Plugins can, if desired, use their own `tool.*`
-sections as well.
+There is an optional key, `provider-path`, which specifies a local directory to
+load the plugin from, allowing plugins to live inside your own project. Plugins
+can, if desired, use their own `tool.*` sections as well.
 
 ### Example: regex
 
@@ -46,24 +51,24 @@ build-backend = "..."
 [project]
 dynamic = ["version"]
 
-[tool.dynamic-metadata.version]
+[[tool.dynamic-metadata]]
 provider = "dynamic_metadata.plugins.regex"
+field = "version"
 input = "src/my_package/__init__.py"
 regex = '(?i)^(__version__|VERSION) *= *([\'"])v?(?P<value>.+?)\2'
 ```
 
-In this case, since the plugin lives inside `dynamic-metadata`, you have to
-include that in your requirements. Make sure the version is marked dynamic in
-your project table. And then you specify `version.provider`. The other options
-are defined by the plugin; this one takes a required `input` file and an
-optional `regex` (which defaults to the expression you see above). The regex
-optional `regex` (which defaults to the expression you see above). The regex
-needs to have a `"value"` named group (`?P<value>`), which it will set.
+Since this plugin lives inside `dynamic-metadata`, you have to include that in
+your requirements. Make sure the field is marked dynamic in your project table.
+The settings are defined by the plugin; this one takes the target `field`, a
+required `input` file, and an optional `regex` (which defaults to the expression
+above). The regex needs a `"value"` named group (`?P<value>`), which it will
+set.
 
 ### Mixing static and dynamic values (PEP 808)
 
 Following [PEP 808][], list and table fields can be given a static value in
-`[project]` _and_ listed in `dynamic` at the same time. The provider may only
+`[project]` _and_ listed in `dynamic` at the same time. A provider may only
 **add** to the static portion — it cannot remove, reorder, or change existing
 entries.
 
@@ -72,22 +77,25 @@ entries.
 dependencies = ["torch", "packaging"]
 dynamic = ["dependencies"]
 
-[tool.dynamic-metadata.dependencies]
+[[tool.dynamic-metadata]]
 provider = "..."
+field = "dependencies"
 ```
 
-The provider returns only its additions; the loader merges them onto the static
-value, with static entries kept first and the provider's entries appended
-verbatim. A provider may read the static value of the field it is extending via
-`project[...]` (e.g. `project["dependencies"]`) to decide what to add —
-requesting any _other_ unresolved field works too, but requesting one whose own
-provider is still running is a circular dependency and raises. For tables
-(`urls`, `scripts`, `entry-points`, `optional-dependencies`, …) the provider may
-add keys but not change the value of an existing one.
+The provider returns only its additions; the loader merges them onto the current
+value, with existing entries kept first and the provider's entries appended
+verbatim. A provider may read the value of any field already resolved (the
+static value of the field it is extending, or any field produced by an earlier
+entry) via `project[...]` to decide what to add; reading a field that has not
+been produced yet raises a `KeyError`. For tables (`urls`, `scripts`,
+`entry-points`, `optional-dependencies`, …) the provider may add keys but not
+change the value of an existing one.
 
-This applies to every list/table field; the single-value string fields
-(`version`, `description`, `requires-python`, `license`) and `readme` cannot be
-extended and so may only be fully static or fully dynamic.
+This add-only merge applies to every list/table field. The single-value fields
+(`version`, `description`, `requires-python`, `license`, and `readme`) cannot be
+extended, so they may not be both static and dynamic; a later entry targeting
+one of them instead **replaces** the value (a transform pipeline — for example,
+one plugin extracts a version and a later one normalizes it).
 
 [PEP 808]: https://peps.python.org/pep-0808/
 
@@ -103,14 +111,24 @@ implement; one required hook and two optional hooks. The required hook is:
 
 ```python
 def dynamic_metadata(
-    field: str,
     settings: Mapping[str, Any],
     project: Mapping[str, Any],
     build_state: str,
-) -> str | dict[str, Any]: ...  # return the value of the metadata
+) -> dict[str, Any]: ...  # return a fragment of [project], e.g. {"version": ...}
 ```
 
-The backend will call this hook in the same directory as PEP 517's hooks.
+The hook returns a **dict** that is a fragment of the `[project]` table — a
+mapping of field name to value, such as `{"version": "1.2.3"}` or
+`{"dependencies": ["numpy"]}`. The framework merges it into the project. One
+plugin may set several fields at once, and every returned field must be listed
+in `[project].dynamic`.
+
+The hook no longer receives a `field` argument: a single-purpose plugin
+(`setuptools_scm`, `fancy_pypi_readme`) hardcodes which field it produces, while
+a generic plugin (`regex`, `template`) reads the target field from a `field`
+setting. `project` is a read-only mapping of the project as resolved so far;
+read another field's value with `project["version"]`. The backend calls this
+hook in the same directory as PEP 517's hooks.
 
 `build_state` is a string the backend supplies describing the current build. It
 must be one of scikit-build-core's five build states: `"sdist"`, `"wheel"`,
@@ -125,16 +143,15 @@ A plugin can return METADATA 2.2 dynamic status:
 
 ```python
 def dynamic_wheel(
-    field: str,
     settings: Mapping[str, Any],
-) -> (
-    bool
-): ...  # Return true if metadata can change from SDist to wheel (METADATA 2.2 feature)
+) -> dict[str, bool]: ...  # map each field set -> may it change from SDist to wheel?
 ```
 
-If this hook is not implemented, it will default to "false". Note that "version"
-must always return "false". This hook is called after the main hook, so you do
-not need to validate the input here.
+It returns a map from each field this plugin sets to whether that field's value
+can change between the SDist and the wheel (the METADATA 2.2 feature). A field
+not present defaults to "false", and `"version"` must always be "false". This
+hook is called after the main hook, so you do not need to validate the input
+here.
 
 A plugin can also decide at runtime if it needs extra dependencies:
 
@@ -149,39 +166,37 @@ for plugins that require a CLI tool that has an optional compiled component.
 
 ### Example: regex
 
-Here is the regex plugin example implementation:
+Here is a simplified version of the regex plugin:
 
 ```python
 def dynamic_metadata(
-    field: str,
     settings: Mapping[str, Any],
     _project: Mapping[str, Any],
     _build_state: str,
-) -> str:
+) -> dict[str, Any]:
     # Input validation
-    if field not in {"version", "description", "requires-python"}:
-        raise RuntimeError("Only string fields supported by this plugin")
-    if settings.keys() - {"input", "regex"}:
-        raise RuntimeError("Only 'input' and 'regex' settings allowed by this plugin")
+    if settings.keys() - {"field", "input", "regex"}:
+        raise RuntimeError("Only 'field', 'input', and 'regex' settings allowed")
+    if "field" not in settings:
+        raise RuntimeError("Must contain the 'field' setting naming the target")
     if "input" not in settings:
         raise RuntimeError("Must contain the 'input' setting to perform a regex on")
     if not all(isinstance(x, str) for x in settings.values()):
-        raise RuntimeError("Must set 'input' and/or 'regex' to strings")
+        raise RuntimeError("All settings must be strings")
 
-    input = settings["input"]
-    # If not explicitly specified in the `tool.dynamic-metadata.<field-name>` table,
-    # the default regex provided below is used.
+    field = settings["field"]
+    # If not explicitly specified in the entry, the default regex below is used.
     regex = settings.get(
         "regex", r'(?i)^(__version__|VERSION) *= *([\'"])v?(?P<value>.+?)\2'
     )
 
-    with Path(input).open(encoding="utf-8") as f:
+    with Path(settings["input"]).open(encoding="utf-8") as f:
         match = re.search(regex, f.read())
 
     if not match:
-        raise RuntimeError(f"Couldn't find {regex!r} in {file}")
+        raise RuntimeError(f"Couldn't find {regex!r} in {settings['input']}")
 
-    return match.groups("value")
+    return {field: match.group("value")}
 ```
 
 ## For backend authors
@@ -191,9 +206,11 @@ library provides some helper functions you can use if you want, but you can
 implement them yourself following the standard provided or vendor the helper
 file (which will be tested and supported).
 
-You should collect the contents of `tool.dynamic-metadata` and load each one.
-You should respect requests for metadata from other plugins, as well; to see how
-to do that, refer to `src/dynamic-metadata/loader.py`.
+Collect the array of `[[tool.dynamic-metadata]]` entries and process them in
+order: load each entry's `provider`, call its `dynamic_metadata` hook with a
+snapshot of the project resolved so far, and merge the returned fragment in.
+Because the order is explicit, there is no dependency graph to compute — see
+`src/dynamic_metadata/loader.py` for the reference loop.
 
 <!-- prettier-ignore-start -->
 [actions-badge]:            https://github.com/scikit-build/dynamic-metadata/workflows/CI/badge.svg

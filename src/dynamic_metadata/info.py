@@ -6,6 +6,7 @@ __all__ = [
     "EXTENDABLE_FIELDS",
     "LIST_DICT_FIELDS",
     "LIST_STR_FIELDS",
+    "SCALAR_FIELDS",
     "STR_FIELDS",
 ]
 
@@ -43,6 +44,10 @@ LIST_DICT_FIELDS = frozenset(
         "maintainers",
     ]
 )
+
+# Single-value fields: a later entry replaces the value rather than extending it,
+# and PEP 808 forbids giving them both statically and dynamically.
+SCALAR_FIELDS = STR_FIELDS | frozenset(["readme"])
 
 # "dynamic" and "name" can't be set or requested
 ALL_FIELDS = (

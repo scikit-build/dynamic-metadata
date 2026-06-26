@@ -16,17 +16,12 @@ def __dir__() -> list[str]:
 
 
 def dynamic_metadata(
-    field: str,
     settings: dict[str, list[str] | str],
     project: Mapping[str, Any],
     _build_state: str,
-) -> dict[str, str | None]:
+) -> dict[str, Any]:
     from hatch_fancy_pypi_readme._builder import build_text
     from hatch_fancy_pypi_readme._config import load_and_validate_config
-
-    if field != "readme":
-        msg = "Only the 'readme' field is supported"
-        raise ValueError(msg)
 
     if settings:
         msg = "No inline configuration is supported"
@@ -54,8 +49,10 @@ def dynamic_metadata(
         text = build_text(config.fragments)  # type: ignore[call-arg]
 
     return {
-        "content-type": config.content_type,
-        "text": text,
+        "readme": {
+            "content-type": config.content_type,
+            "text": text,
+        }
     }
 
 

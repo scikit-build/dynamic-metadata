@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-import dataclasses
 import importlib
 import importlib.abc
 import importlib.machinery
 import sys
-from collections.abc import Iterator, Mapping
 from pathlib import Path
+from types import MappingProxyType
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -23,6 +22,7 @@ from .info import (
     EXTENDABLE_FIELDS,
     LIST_DICT_FIELDS,
     LIST_STR_FIELDS,
+    SCALAR_FIELDS,
 )
 
 BuildState = Literal[
@@ -31,13 +31,9 @@ BuildState = Literal[
 BUILD_STATES: frozenset[str] = frozenset(get_args(BuildState))
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Sequence
+    from collections.abc import Generator, Mapping, Sequence
     from importlib.machinery import ModuleSpec
     from types import ModuleType
-
-    StrMapping = Mapping[str, Any]
-else:
-    StrMapping = Mapping
 
 
 __all__ = [
@@ -56,23 +52,22 @@ def __dir__() -> list[str]:
 class DynamicMetadataProtocol(Protocol):
     def dynamic_metadata(
         self,
-        field: str,
-        settings: dict[str, Any],
+        settings: Mapping[str, Any],
         project: Mapping[str, Any],
         build_state: BuildState,
-    ) -> Any: ...
+    ) -> dict[str, Any]: ...
 
 
 @runtime_checkable
 class DynamicMetadataRequirementsProtocol(DynamicMetadataProtocol, Protocol):
     def get_requires_for_dynamic_metadata(
-        self, settings: dict[str, Any]
+        self, settings: Mapping[str, Any]
     ) -> list[str]: ...
 
 
 @runtime_checkable
 class DynamicMetadataWheelProtocol(DynamicMetadataProtocol, Protocol):
-    def dynamic_wheel(self, field: str, settings: Mapping[str, Any]) -> bool: ...
+    def dynamic_wheel(self, settings: Mapping[str, Any]) -> dict[str, bool]: ...
 
 
 DMProtocols = Union[
@@ -80,6 +75,10 @@ DMProtocols = Union[
     DynamicMetadataRequirementsProtocol,
     DynamicMetadataWheelProtocol,
 ]
+
+# Per-entry keys consumed by the loader itself; everything else is plugin
+# settings, passed through verbatim to the provider.
+RESERVED_KEYS = frozenset(["provider", "provider-path"])
 
 
 class _ProviderPathFinder(importlib.abc.MetaPathFinder):
@@ -131,11 +130,13 @@ def _merge_dict(
 
 
 def _merge_metadata(field: str, static: Any, dynamic: Any) -> Any:
-    """Merge a static value with a provider's additions (PEP 808).
+    """Merge a current value with a provider's additions (PEP 808).
 
-    Existing static entries are preserved as-is and kept first; the provider's
-    value is appended after them. Lists are concatenated verbatim, so a provider
-    should return only its additions and may add a value already present.
+    Existing entries are preserved as-is and kept first; the provider's value is
+    appended after them. Lists are concatenated verbatim, so a provider should
+    return only its additions and may add a value already present. Single-value
+    fields (string fields, readme) cannot be extended; merging onto a static
+    value of one is the invalid "static *and* dynamic" case and raises.
     """
     if field not in EXTENDABLE_FIELDS:
         msg = f"Field {field!r} cannot be given both statically and dynamically"
@@ -182,99 +183,35 @@ def load_provider(
 
 
 def load_dynamic_metadata(
-    metadata: Mapping[str, Mapping[str, Any]],
-) -> Generator[tuple[str, DMProtocols | None, dict[str, str]], None, None]:
-    for field, orig_config in metadata.items():
-        if "provider" in orig_config:
-            if field not in ALL_FIELDS:
-                msg = f"{field} is not a valid field"
-                raise KeyError(msg)
-            config = dict(orig_config)
-            provider = config.pop("provider")
-            provider_path = config.pop("provider-path", None)
-            loaded_provider = load_provider(provider, provider_path)
-            yield field, loaded_provider, config
-        else:
-            yield field, None, dict(orig_config)
+    entries: Sequence[Mapping[str, Any]],
+) -> Generator[tuple[DMProtocols, dict[str, Any]], None, None]:
+    """Load each entry's provider, yielding it with its plugin settings.
 
-
-@dataclasses.dataclass
-class DynamicPyProject(StrMapping):
-    settings: dict[str, dict[str, Any]]
-    project: dict[str, Any]
-    providers: dict[str, DMProtocols]
-    build_state: BuildState
-    # Stack of fields whose providers are currently running, innermost last.
-    _resolving: list[str] = dataclasses.field(default_factory=list)
-
-    def __getitem__(self, key: str) -> Any:
-        # PEP 808: a provider may read the static value of the field it is
-        # itself resolving (the innermost in-flight field) to decide what to
-        # add. Any other in-flight field is a circular dependency, handled below.
-        if self._resolving and self._resolving[-1] == key and key in self.project:
-            return self.project[key]
-
-        # Static-only fields, and providers that have already resolved, are
-        # returned as-is. An in-flight field is excluded so a re-entrant request
-        # for it is not answered with its incomplete (static-only) value.
-        if (
-            key in self.project
-            and key not in self.providers
-            and key not in self._resolving
-        ):
-            return self.project[key]
-
-        # Check if we are in a loop, i.e. something else is already requesting
-        # this key while trying to get another key
-        if key not in self.providers:
-            dep_type = "circular" if key in self.settings else "missing"
-            msg = f"Encountered a {dep_type} dependency at {key}"
-            raise ValueError(msg)
-
-        provider = self.providers.pop(key)
-        self._resolving.append(key)
-        try:
-            result = provider.dynamic_metadata(
-                key, self.settings[key], self, self.build_state
-            )
-        finally:
-            self._resolving.pop()
-        if key in self.project:
-            # PEP 808: the field is given both statically and dynamically, so
-            # the provider's result only adds to the static portion.
-            result = _merge_metadata(key, self.project[key], result)
-        self.project[key] = result
-        self.project["dynamic"].remove(key)
-
-        return self.project[key]
-
-    def __iter__(self) -> Iterator[str]:
-        # Iterate over static and provider keys, without repeating a PEP 808
-        # field that appears in both.
-        seen: set[str] = set()
-        for key in (*self.project, *self.providers):
-            if key not in seen:
-                seen.add(key)
-                yield key
-
-    def __len__(self) -> int:
-        return len(self.project.keys() | self.providers.keys())
-
-    def __contains__(self, key: object) -> bool:
-        return key in self.project or key in self.providers
+    Entries are processed in order; ``provider`` and ``provider-path`` are
+    consumed here and the remaining keys are returned as plugin settings.
+    """
+    for entry in entries:
+        if "provider" not in entry:
+            msg = "Each [[tool.dynamic-metadata]] entry must set a 'provider'"
+            raise KeyError(msg)
+        settings = {k: v for k, v in entry.items() if k not in RESERVED_KEYS}
+        provider = load_provider(entry["provider"], entry.get("provider-path"))
+        yield provider, settings
 
 
 def process_dynamic_metadata(
     project: Mapping[str, Any],
-    metadata: Mapping[str, Mapping[str, Any]],
+    entries: Sequence[Mapping[str, Any]],
     build_state: BuildState,
 ) -> dict[str, Any]:
     """Process dynamic metadata.
 
-    This function loads the dynamic metadata providers and calls them to
-    generate the dynamic metadata. It takes the original project table and
-    returns a new project table. Empty providers are not supported; you
-    need to implement this yourself for now if you support that.
+    Takes the original ``[project]`` table and an ordered list of
+    ``[[tool.dynamic-metadata]]`` entries, and returns a new project table.
+    Entries run in list order: each provider is called with a read-only snapshot
+    of the project as resolved so far, so a later entry can read a field an
+    earlier one produced via ``project[...]``. A provider returns a ``dict``
+    fragment of the project table (``{field: value, ...}``) which is merged in.
 
     ``build_state`` is the backend's description of the current build, passed
     through to each provider. It must be one of these build states
@@ -287,20 +224,43 @@ def process_dynamic_metadata(
         msg = f"build_state must be one of {sorted(BUILD_STATES)}, got {build_state!r}"
         raise ValueError(msg)
 
-    settings: dict[str, dict[str, Any]] = {}
-    providers: dict[str, DMProtocols] = {}
-    for field, provider, config in load_dynamic_metadata(metadata):
-        if provider is None:
-            msg = f"{field} does not have a provider"
-            raise KeyError(msg)
-        settings[field] = config
-        providers[field] = provider
+    result = dict(project)
+    result["dynamic"] = list(result.get("dynamic", []))
+    declared_dynamic = set(result["dynamic"])
+    snapshot = MappingProxyType(result)
 
-    dynamic = DynamicPyProject(
-        settings=settings,
-        project=dict(project),
-        providers=providers,
-        build_state=build_state,
-    )
+    # Fields already written by an earlier entry: a further entry merges onto
+    # that result (and may *replace* a scalar), as opposed to a static value
+    # still sitting in [project], which is the PEP 808 add-only case.
+    produced: set[str] = set()
 
-    return dict(dynamic)
+    for provider, settings in load_dynamic_metadata(entries):
+        fragment = provider.dynamic_metadata(settings, snapshot, build_state)
+
+        for field in fragment:
+            if field not in ALL_FIELDS:
+                msg = f"{field!r} is not a settable dynamic-metadata field"
+                raise KeyError(msg)
+            if field not in declared_dynamic:
+                msg = f"{field!r} must be listed in project.dynamic to be set"
+                raise KeyError(msg)
+
+        for field, value in fragment.items():
+            if field in produced:
+                # A second entry for this field: extend its prior result, or for
+                # a single-value field replace it (a transform pipeline).
+                result[field] = (
+                    value
+                    if field in SCALAR_FIELDS
+                    else _merge_metadata(field, result[field], value)
+                )
+            elif field in result:
+                # PEP 808: a static value is present; the provider only adds.
+                result[field] = _merge_metadata(field, result[field], value)
+            else:
+                result[field] = value
+            produced.add(field)
+            if field in result["dynamic"]:
+                result["dynamic"].remove(field)
+
+    return result

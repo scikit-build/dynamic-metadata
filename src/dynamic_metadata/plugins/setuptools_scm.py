@@ -8,17 +8,12 @@ def __dir__() -> list[str]:
 
 
 def dynamic_metadata(
-    field: str,
     settings: dict[str, object],
     _project: dict[str, object],
     _build_state: str,
-) -> str:
+) -> dict[str, object]:
     # this is a classic implementation, waiting for the release of
     # vcs-versioning and an improved public interface
-
-    if field != "version":
-        msg = "Only the 'version' field is supported"
-        raise ValueError(msg)
 
     if settings:
         msg = "No inline configuration is supported"
@@ -47,7 +42,7 @@ def dynamic_metadata(
 
         raise ValueError(msg)
 
-    return version
+    return {"version": version}
 
 
 def get_requires_for_dynamic_metadata(

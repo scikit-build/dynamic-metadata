@@ -13,12 +13,12 @@ def test_load_provider_path_loads_local(tmp_path: Path) -> None:
     plugin_dir = tmp_path / "plugins"
     plugin_dir.mkdir()
     (plugin_dir / "local_prov_ok.py").write_text(
-        "def dynamic_metadata(field, settings, project, build_state):\n"
-        "    return '1.2.3'\n"
+        "def dynamic_metadata(settings, project, build_state):\n"
+        "    return {'version': '1.2.3'}\n"
     )
 
     provider = dynamic_metadata.loader.load_provider("local_prov_ok", str(plugin_dir))
-    assert provider.dynamic_metadata("version", {}, {}, "wheel") == "1.2.3"
+    assert provider.dynamic_metadata({}, {}, "wheel") == {"version": "1.2.3"}
 
 
 def test_load_provider_path_not_shadowed(
@@ -44,44 +44,171 @@ def test_template_basic() -> None:
             "version": "0.1.0",
             "dynamic": ["requires-python"],
         },
-        {
-            "requires-python": {
+        [
+            {
                 "provider": "dynamic_metadata.plugins.template",
+                "field": "requires-python",
                 "result": ">={project[version]}",
             },
-        },
+        ],
         "wheel",
     )
 
     assert pyproject["requires-python"] == ">=0.1.0"
+    assert pyproject["dynamic"] == []
 
 
-def test_template_needs() -> None:
-    # These are intentionally out of order to test the order of processing
+def test_template_order_reads_earlier_result() -> None:
+    # Entries run in list order; each later one reads what the earlier produced.
     pyproject = dynamic_metadata.loader.process_dynamic_metadata(
         {
             "name": "test",
             "version": "0.1.0",
             "dynamic": ["requires-python", "license", "readme"],
         },
-        {
-            "license": {
+        [
+            {
                 "provider": "dynamic_metadata.plugins.template",
-                "result": "{project[requires-python]}",
-            },
-            "readme": {
-                "provider": "dynamic_metadata.plugins.template",
-                "result": {"file": "{project[license]}"},
-            },
-            "requires-python": {
-                "provider": "dynamic_metadata.plugins.template",
+                "field": "requires-python",
                 "result": ">={project[version]}",
             },
-        },
+            {
+                "provider": "dynamic_metadata.plugins.template",
+                "field": "license",
+                "result": "{project[requires-python]}",
+            },
+            {
+                "provider": "dynamic_metadata.plugins.template",
+                "field": "readme",
+                "result": {"file": "{project[license]}"},
+            },
+        ],
         "wheel",
     )
 
     assert pyproject["requires-python"] == ">=0.1.0"
+    assert pyproject["license"] == ">=0.1.0"
+    assert pyproject["readme"] == {"file": ">=0.1.0"}
+    assert pyproject["dynamic"] == []
+
+
+def test_forward_reference_raises() -> None:
+    # Reading a field that a *later* entry produces is a forward reference: the
+    # value is simply not in the project snapshot yet.
+    with pytest.raises(KeyError):
+        dynamic_metadata.loader.process_dynamic_metadata(
+            {"name": "test", "dynamic": ["requires-python", "version"]},
+            [
+                {
+                    "provider": "dynamic_metadata.plugins.template",
+                    "field": "requires-python",
+                    "result": ">={project[version]}",
+                },
+                {
+                    "provider": "dynamic_metadata.plugins.template",
+                    "field": "version",
+                    "result": "1.0",
+                },
+            ],
+            "wheel",
+        )
+
+
+def test_multiple_entries_same_field_merge_in_order() -> None:
+    # Two entries may target one field; their contributions merge in order.
+    pyproject = dynamic_metadata.loader.process_dynamic_metadata(
+        {"name": "test", "dynamic": ["dependencies"]},
+        [
+            {
+                "provider": "dynamic_metadata.plugins.template",
+                "field": "dependencies",
+                "result": ["a"],
+            },
+            {
+                "provider": "dynamic_metadata.plugins.template",
+                "field": "dependencies",
+                "result": ["b"],
+            },
+        ],
+        "wheel",
+    )
+
+    assert pyproject["dependencies"] == ["a", "b"]
+    assert pyproject["dynamic"] == []
+
+
+def test_scalar_field_second_entry_replaces() -> None:
+    # A single-value field can be transformed by a later entry that reads it.
+    pyproject = dynamic_metadata.loader.process_dynamic_metadata(
+        {"name": "test", "dynamic": ["version"]},
+        [
+            {
+                "provider": "dynamic_metadata.plugins.template",
+                "field": "version",
+                "result": "1.0",
+            },
+            {
+                "provider": "dynamic_metadata.plugins.template",
+                "field": "version",
+                "result": "{project[version]}.post1",
+            },
+        ],
+        "wheel",
+    )
+
+    assert pyproject["version"] == "1.0.post1"
+
+
+def test_provider_sets_multiple_fields(tmp_path: Path) -> None:
+    # One entry's fragment may set several fields at once.
+    plugin_dir = tmp_path / "plugins"
+    plugin_dir.mkdir()
+    (plugin_dir / "multi_prov.py").write_text(
+        "def dynamic_metadata(settings, project, build_state):\n"
+        "    return {'version': '1.2.3', 'requires-python': '>=3.8'}\n"
+    )
+
+    pyproject = dynamic_metadata.loader.process_dynamic_metadata(
+        {"name": "test", "dynamic": ["version", "requires-python"]},
+        [{"provider": "multi_prov", "provider-path": str(plugin_dir)}],
+        "wheel",
+    )
+
+    assert pyproject["version"] == "1.2.3"
+    assert pyproject["requires-python"] == ">=3.8"
+    assert pyproject["dynamic"] == []
+
+
+def test_unknown_field_rejected(tmp_path: Path) -> None:
+    plugin_dir = tmp_path / "plugins"
+    plugin_dir.mkdir()
+    (plugin_dir / "bad_field_prov.py").write_text(
+        "def dynamic_metadata(settings, project, build_state):\n"
+        "    return {'not-a-field': 'x'}\n"
+    )
+
+    with pytest.raises(KeyError, match="settable"):
+        dynamic_metadata.loader.process_dynamic_metadata(
+            {"name": "test", "dynamic": ["version"]},
+            [{"provider": "bad_field_prov", "provider-path": str(plugin_dir)}],
+            "wheel",
+        )
+
+
+def test_field_not_declared_dynamic_rejected(tmp_path: Path) -> None:
+    plugin_dir = tmp_path / "plugins"
+    plugin_dir.mkdir()
+    (plugin_dir / "undeclared_prov.py").write_text(
+        "def dynamic_metadata(settings, project, build_state):\n"
+        "    return {'version': '1.0'}\n"
+    )
+
+    with pytest.raises(KeyError, match=r"project\.dynamic"):
+        dynamic_metadata.loader.process_dynamic_metadata(
+            {"name": "test", "dynamic": []},
+            [{"provider": "undeclared_prov", "provider-path": str(plugin_dir)}],
+            "wheel",
+        )
 
 
 def test_template_entry_points() -> None:
@@ -90,18 +217,20 @@ def test_template_entry_points() -> None:
             "name": "test",
             "dynamic": ["version", "entry-points"],
         },
-        {
-            "version": {
+        [
+            {
                 "provider": "dynamic_metadata.plugins.template",
+                "field": "version",
                 "result": "1.2.3",
             },
-            "entry-points": {
+            {
                 "provider": "dynamic_metadata.plugins.template",
+                "field": "entry-points",
                 "result": {
                     "my_group": {"my_point": "my_app:script_{project[version]}"}
                 },
             },
-        },
+        ],
         "wheel",
     )
 
@@ -117,14 +246,15 @@ def test_regex() -> None:
             "version": "0.1.0",
             "dynamic": ["requires-python"],
         },
-        {
-            "requires-python": {
+        [
+            {
                 "provider": "dynamic_metadata.plugins.regex",
+                "field": "requires-python",
                 "input": "pyproject.toml",
                 "regex": r"name = \"(?P<name>.+)\"",
                 "result": ">={name}",
             },
-        },
+        ],
         "wheel",
     )
 
@@ -135,13 +265,14 @@ def test_regex_rejects_unknown_setting() -> None:
     with pytest.raises(RuntimeError, match="settings allowed"):
         dynamic_metadata.loader.process_dynamic_metadata(
             {"name": "test", "version": "0.1.0", "dynamic": ["requires-python"]},
-            {
-                "requires-python": {
+            [
+                {
                     "provider": "dynamic_metadata.plugins.regex",
+                    "field": "requires-python",
                     "input": "pyproject.toml",
                     "typo": "oops",
                 },
-            },
+            ],
             "wheel",
         )
 
@@ -152,21 +283,21 @@ def test_build_state_passed_to_provider(tmp_path: Path) -> None:
     plugin_dir = tmp_path / "plugins"
     plugin_dir.mkdir()
     (plugin_dir / "build_state_prov.py").write_text(
-        "def dynamic_metadata(field, settings, project, build_state):\n"
+        "def dynamic_metadata(settings, project, build_state):\n"
         "    if build_state in {'sdist', 'wheel'}:\n"
-        "        return 'computed'\n"
-        "    return 'reused'\n"
+        "        return {'version': 'computed'}\n"
+        "    return {'version': 'reused'}\n"
     )
 
     def run(build_state: dynamic_metadata.loader.BuildState) -> Any:
         return dynamic_metadata.loader.process_dynamic_metadata(
             {"name": "test", "dynamic": ["version"]},
-            {
-                "version": {
+            [
+                {
                     "provider": "build_state_prov",
                     "provider-path": str(plugin_dir),
                 },
-            },
+            ],
             build_state,
         )["version"]
 
@@ -179,7 +310,7 @@ def test_build_state_rejects_unknown_value() -> None:
     with pytest.raises(ValueError, match="build_state must be one of"):
         dynamic_metadata.loader.process_dynamic_metadata(
             {"name": "test", "version": "0.1.0"},
-            {},
+            [],
             "bdist",  # type: ignore[arg-type]
         )
 
@@ -193,12 +324,13 @@ def test_pep808_extends_static_dependencies() -> None:
             "dependencies": ["torch", "packaging"],
             "dynamic": ["dependencies"],
         },
-        {
-            "dependencies": {
+        [
+            {
                 "provider": "dynamic_metadata.plugins.template",
+                "field": "dependencies",
                 "result": ["numpy>={project[version]}"],
             },
-        },
+        ],
         "wheel",
     )
 
@@ -216,57 +348,17 @@ def test_pep808_provider_reads_own_static() -> None:
             "dependencies": ["a", "b"],
             "dynamic": ["dependencies"],
         },
-        {
-            "dependencies": {
+        [
+            {
                 "provider": "dynamic_metadata.plugins.template",
+                "field": "dependencies",
                 "result": ["saw:{project[dependencies]}"],
             },
-        },
+        ],
         "wheel",
     )
 
     assert pyproject["dependencies"] == ["a", "b", "saw:['a', 'b']"]
-
-
-def test_pep808_circular_dependency_detected() -> None:
-    # A static-and-dynamic field must not let its own static value satisfy a
-    # re-entrant request while its provider is mid-resolution: the cycle below
-    # (dependencies -> classifiers -> dependencies) must still be detected.
-    with pytest.raises(ValueError, match="circular"):
-        dynamic_metadata.loader.process_dynamic_metadata(
-            {
-                "name": "test",
-                "dependencies": ["a"],
-                "dynamic": ["dependencies", "classifiers"],
-            },
-            {
-                "dependencies": {
-                    "provider": "dynamic_metadata.plugins.template",
-                    "result": ["{project[classifiers]}"],
-                },
-                "classifiers": {
-                    "provider": "dynamic_metadata.plugins.template",
-                    "result": ["{project[dependencies]}"],
-                },
-            },
-            "wheel",
-        )
-
-
-def test_missing_dependency_detected() -> None:
-    # A reference to a field with neither a static value nor a provider is a
-    # missing (not circular) dependency.
-    with pytest.raises(ValueError, match="missing"):
-        dynamic_metadata.loader.process_dynamic_metadata(
-            {"name": "test", "dynamic": ["requires-python"]},
-            {
-                "requires-python": {
-                    "provider": "dynamic_metadata.plugins.template",
-                    "result": ">={project[nonexistent]}",
-                },
-            },
-            "wheel",
-        )
 
 
 @pytest.mark.parametrize(
