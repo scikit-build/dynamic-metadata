@@ -158,7 +158,7 @@ def test_build_state_passed_to_provider(tmp_path: Path) -> None:
         "    return 'reused'\n"
     )
 
-    def run(build_state: str) -> Any:
+    def run(build_state: dynamic_metadata.loader.BuildState) -> Any:
         return dynamic_metadata.loader.process_dynamic_metadata(
             {"name": "test", "dynamic": ["version"]},
             {
@@ -172,7 +172,16 @@ def test_build_state_passed_to_provider(tmp_path: Path) -> None:
 
     assert run("sdist") == "computed"
     assert run("wheel") == "computed"
-    assert run("metadata") == "reused"
+    assert run("metadata_wheel") == "reused"
+
+
+def test_build_state_rejects_unknown_value() -> None:
+    with pytest.raises(ValueError, match="build_state must be one of"):
+        dynamic_metadata.loader.process_dynamic_metadata(
+            {"name": "test", "version": "0.1.0"},
+            {},
+            "bdist",  # type: ignore[arg-type]
+        )
 
 
 def test_pep808_extends_static_dependencies() -> None:

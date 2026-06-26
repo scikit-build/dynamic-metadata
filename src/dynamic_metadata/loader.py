@@ -7,7 +7,15 @@ import importlib.machinery
 import sys
 from collections.abc import Iterator, Mapping
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Protocol, Union, runtime_checkable
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Literal,
+    Protocol,
+    Union,
+    get_args,
+    runtime_checkable,
+)
 
 from .info import (
     ALL_FIELDS,
@@ -16,6 +24,13 @@ from .info import (
     LIST_DICT_FIELDS,
     LIST_STR_FIELDS,
 )
+
+# Mirrors scikit-build-core's build states; the metadata phase is split by
+# target (``prepare_metadata_for_build_wheel`` / ``_build_editable``).
+BuildState = Literal[
+    "sdist", "wheel", "editable", "metadata_wheel", "metadata_editable"
+]
+BUILD_STATES: frozenset[str] = frozenset(get_args(BuildState))
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Sequence
@@ -27,7 +42,12 @@ else:
     StrMapping = Mapping
 
 
-__all__ = ["load_dynamic_metadata", "load_provider", "process_dynamic_metadata"]
+__all__ = [
+    "BuildState",
+    "load_dynamic_metadata",
+    "load_provider",
+    "process_dynamic_metadata",
+]
 
 
 def __dir__() -> list[str]:
@@ -41,7 +61,7 @@ class DynamicMetadataProtocol(Protocol):
         field: str,
         settings: dict[str, Any],
         project: Mapping[str, Any],
-        build_state: str,
+        build_state: BuildState,
     ) -> Any: ...
 
 
@@ -185,7 +205,7 @@ class DynamicPyProject(StrMapping):
     settings: dict[str, dict[str, Any]]
     project: dict[str, Any]
     providers: dict[str, DMProtocols]
-    build_state: str
+    build_state: BuildState
     # Stack of fields whose providers are currently running, innermost last.
     _resolving: list[str] = dataclasses.field(default_factory=list)
 
@@ -249,7 +269,7 @@ class DynamicPyProject(StrMapping):
 def process_dynamic_metadata(
     project: Mapping[str, Any],
     metadata: Mapping[str, Mapping[str, Any]],
-    build_state: str,
+    build_state: BuildState,
 ) -> dict[str, Any]:
     """Process dynamic metadata.
 
@@ -259,11 +279,15 @@ def process_dynamic_metadata(
     need to implement this yourself for now if you support that.
 
     ``build_state`` is the backend's description of the current build, passed
-    through to each provider. The recommended values mirror PEP 517's hooks:
-    ``"sdist"``, ``"wheel"``, ``"editable"``, and ``"metadata"`` (the
-    ``prepare_metadata_for_build_wheel`` phase). Providers may use it or ignore
-    it; the value set is a convention, not enforced.
+    through to each provider. It must be one of scikit-build-core's build
+    states (``BUILD_STATES``): ``"sdist"``, ``"wheel"``, ``"editable"``,
+    ``"metadata_wheel"``, or ``"metadata_editable"``. Providers may use it or
+    ignore it.
     """
+
+    if build_state not in BUILD_STATES:
+        msg = f"build_state must be one of {sorted(BUILD_STATES)}, got {build_state!r}"
+        raise ValueError(msg)
 
     settings: dict[str, dict[str, Any]] = {}
     providers: dict[str, DMProtocols] = {}

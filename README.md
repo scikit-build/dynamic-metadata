@@ -112,12 +112,12 @@ def dynamic_metadata(
 
 The backend will call this hook in the same directory as PEP 517's hooks.
 
-`build_state` is a string the backend supplies describing the current build. The
-recommended values mirror PEP 517's hooks: `"sdist"`, `"wheel"`, `"editable"`,
-and `"metadata"` (the `prepare_metadata_for_build_wheel` phase). A plugin may
-use it — for example to reuse a value already computed in an SDist's `PKG-INFO`
-instead of recomputing it for the wheel — or ignore it. The value set is a
-convention, not enforced.
+`build_state` is a string the backend supplies describing the current build. It
+must be one of scikit-build-core's five build states: `"sdist"`, `"wheel"`,
+`"editable"`, `"metadata_wheel"`, or `"metadata_editable"` (the latter two are
+the `prepare_metadata_for_build_*` phases). A plugin may use it — for example to
+reuse a value already computed in an SDist's `PKG-INFO` instead of recomputing
+it for the wheel — or ignore it.
 
 There are two optional hooks.
 
