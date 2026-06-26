@@ -5,7 +5,7 @@ import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from . import _process_dynamic_metadata
+from . import _process_dynamic_metadata, _require_field
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -33,16 +33,10 @@ def dynamic_metadata(
     _build_state: str,
 ) -> dict[str, Any]:
     # Input validation
-    if settings.keys() - KEYS:
-        msg = f"Only {KEYS} settings allowed by this plugin"
-        raise RuntimeError(msg)
-    if "field" not in settings:
-        msg = "Must contain the 'field' setting naming the field to set"
-        raise RuntimeError(msg)
+    field = _require_field(settings, KEYS)
     if "input" not in settings:
         msg = "Must contain the 'input' setting to perform a regex on"
         raise RuntimeError(msg)
-    field = settings["field"]
     if field != "version" and "regex" not in settings:
         msg = "Must contain the 'regex' setting if not getting version"
         raise RuntimeError(msg)

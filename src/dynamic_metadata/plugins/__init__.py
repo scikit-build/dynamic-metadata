@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import typing
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 
 from ..info import DICT_STR_FIELDS, LIST_DICT_FIELDS, LIST_STR_FIELDS, STR_FIELDS
 
@@ -9,6 +9,25 @@ T = typing.TypeVar(
     "T",
     bound="str | list[str] | list[dict[str, str]] | dict[str, str] | dict[str, list[str]] | dict[str, dict[str, str]]",
 )
+
+
+def _require_field(settings: Mapping[str, typing.Any], allowed: set[str]) -> str:
+    """Validate the shared settings shape and return the target ``field`` name.
+
+    Generic plugins (regex, template) accept a fixed set of keys and a required
+    ``field`` naming the metadata field to set.
+    """
+    if settings.keys() - allowed:
+        msg = f"Only {allowed} settings allowed by this plugin"
+        raise RuntimeError(msg)
+    if "field" not in settings:
+        msg = "Must contain the 'field' setting naming the field to set"
+        raise RuntimeError(msg)
+    field = settings["field"]
+    if not isinstance(field, str):
+        msg = "The 'field' setting must be a string"
+        raise RuntimeError(msg)
+    return field
 
 
 def _process_dynamic_metadata(field: str, action: Callable[[str], str], result: T) -> T:

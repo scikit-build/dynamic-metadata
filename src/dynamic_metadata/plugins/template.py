@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-from . import _process_dynamic_metadata
+from . import _process_dynamic_metadata, _require_field
 
 __all__ = ["dynamic_metadata"]
 
@@ -22,19 +22,12 @@ def dynamic_metadata(
     project: Mapping[str, Any],
     _build_state: str,
 ) -> dict[str, Any]:
-    if settings.keys() - KEYS:
-        msg = f"Only {KEYS} settings allowed by this plugin"
-        raise RuntimeError(msg)
-
-    if "field" not in settings:
-        msg = "Must contain the 'field' setting naming the field to set"
-        raise RuntimeError(msg)
+    field = _require_field(settings, KEYS)
 
     if "result" not in settings:
         msg = "Must contain the 'result' setting with a template substitution"
         raise RuntimeError(msg)
 
-    field = settings["field"]
     result = settings["result"]
 
     return {
