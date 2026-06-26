@@ -19,6 +19,7 @@ def dynamic_metadata(
     field: str,
     settings: dict[str, list[str] | str],
     project: Mapping[str, Any],
+    _build_state: str,
 ) -> dict[str, str | None]:
     from hatch_fancy_pypi_readme._builder import build_text
     from hatch_fancy_pypi_readme._config import load_and_validate_config

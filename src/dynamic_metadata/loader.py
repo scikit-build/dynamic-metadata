@@ -41,6 +41,7 @@ class DynamicMetadataProtocol(Protocol):
         field: str,
         settings: dict[str, Any],
         project: Mapping[str, Any],
+        build_state: str,
     ) -> Any: ...
 
 
@@ -184,6 +185,7 @@ class DynamicPyProject(StrMapping):
     settings: dict[str, dict[str, Any]]
     project: dict[str, Any]
     providers: dict[str, DMProtocols]
+    build_state: str
     # Stack of fields whose providers are currently running, innermost last.
     _resolving: list[str] = dataclasses.field(default_factory=list)
 
@@ -214,7 +216,9 @@ class DynamicPyProject(StrMapping):
         provider = self.providers.pop(key)
         self._resolving.append(key)
         try:
-            result = provider.dynamic_metadata(key, self.settings[key], self)
+            result = provider.dynamic_metadata(
+                key, self.settings[key], self, self.build_state
+            )
         finally:
             self._resolving.pop()
         if key in self.project:
@@ -245,6 +249,7 @@ class DynamicPyProject(StrMapping):
 def process_dynamic_metadata(
     project: Mapping[str, Any],
     metadata: Mapping[str, Mapping[str, Any]],
+    build_state: str,
 ) -> dict[str, Any]:
     """Process dynamic metadata.
 
@@ -252,6 +257,12 @@ def process_dynamic_metadata(
     generate the dynamic metadata. It takes the original project table and
     returns a new project table. Empty providers are not supported; you
     need to implement this yourself for now if you support that.
+
+    ``build_state`` is the backend's description of the current build, passed
+    through to each provider. The recommended values mirror PEP 517's hooks:
+    ``"sdist"``, ``"wheel"``, ``"editable"``, and ``"metadata"`` (the
+    ``prepare_metadata_for_build_wheel`` phase). Providers may use it or ignore
+    it; the value set is a convention, not enforced.
     """
 
     settings: dict[str, dict[str, Any]] = {}
@@ -267,6 +278,7 @@ def process_dynamic_metadata(
         settings=settings,
         project=dict(project),
         providers=providers,
+        build_state=build_state,
     )
 
     return dict(dynamic)
