@@ -60,6 +60,37 @@ optional `regex` (which defaults to the expression you see above). The regex
 optional `regex` (which defaults to the expression you see above). The regex
 needs to have a `"value"` named group (`?P<value>`), which it will set.
 
+### Mixing static and dynamic values (PEP 808)
+
+Following [PEP 808][], list and table fields can be given a static value in
+`[project]` _and_ listed in `dynamic` at the same time. The provider may only
+**add** to the static portion — it cannot remove, reorder, or change existing
+entries.
+
+```toml
+[project]
+dependencies = ["torch", "packaging"]
+dynamic = ["dependencies"]
+
+[tool.dynamic-metadata.dependencies]
+provider = "..."
+```
+
+The provider returns only its additions; the loader merges them onto the static
+value, with static entries kept first and the provider's entries appended
+verbatim. A provider may read the static value of the field it is extending via
+`project[...]` (e.g. `project["dependencies"]`) to decide what to add —
+requesting any _other_ unresolved field works too, but requesting one whose own
+provider is still running is a circular dependency and raises. For tables
+(`urls`, `scripts`, `entry-points`, `optional-dependencies`, …) the provider may
+add keys but not change the value of an existing one.
+
+This applies to every list/table field; the single-value string fields
+(`version`, `description`, `requires-python`, `license`) and `readme` cannot be
+extended and so may only be fully static or fully dynamic.
+
+[PEP 808]: https://peps.python.org/pep-0808/
+
 ## For plugin authors
 
 **You do not need to depend on dynamic-metadata to write a plugin.** This
