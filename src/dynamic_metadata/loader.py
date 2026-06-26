@@ -195,16 +195,20 @@ class DynamicPyProject(StrMapping):
         # Check if we are in a loop, i.e. something else is already requesting
         # this key while trying to get another key
         if key not in self.providers:
-            dep_type = "missing" if key in self.settings else "circular"
+            dep_type = "circular" if key in self.settings else "missing"
             msg = f"Encountered a {dep_type} dependency at {key}"
             raise ValueError(msg)
 
         provider = self.providers.pop(key)
+        # PEP 808: the field may be given both statically and dynamically. Drop
+        # the static portion while the provider runs so a re-entrant request for
+        # this key still falls through to the circular-dependency check above
+        # instead of being silently answered with the incomplete static value.
+        had_static = key in self.project
+        static = self.project.pop(key, None)
         result = provider.dynamic_metadata(key, self.settings[key], self)
-        if key in self.project:
-            # PEP 808: the field is given both statically and dynamically, so
-            # the provider's result only adds to the static portion.
-            result = _merge_metadata(key, self.project[key], result)
+        if had_static:
+            result = _merge_metadata(key, static, result)
         self.project[key] = result
         self.project["dynamic"].remove(key)
 

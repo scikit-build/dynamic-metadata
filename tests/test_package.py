@@ -163,6 +163,45 @@ def test_pep808_extends_static_dependencies() -> None:
     assert pyproject["dynamic"] == []
 
 
+def test_pep808_circular_dependency_detected() -> None:
+    # A static-and-dynamic field must not let its own static value satisfy a
+    # re-entrant request while its provider is mid-resolution: the cycle below
+    # (dependencies -> classifiers -> dependencies) must still be detected.
+    with pytest.raises(ValueError, match="circular"):
+        dynamic_metadata.loader.process_dynamic_metadata(
+            {
+                "name": "test",
+                "dependencies": ["a"],
+                "dynamic": ["dependencies", "classifiers"],
+            },
+            {
+                "dependencies": {
+                    "provider": "dynamic_metadata.plugins.template",
+                    "result": ["{project[classifiers]}"],
+                },
+                "classifiers": {
+                    "provider": "dynamic_metadata.plugins.template",
+                    "result": ["{project[dependencies]}"],
+                },
+            },
+        )
+
+
+def test_missing_dependency_detected() -> None:
+    # A reference to a field with neither a static value nor a provider is a
+    # missing (not circular) dependency.
+    with pytest.raises(ValueError, match="missing"):
+        dynamic_metadata.loader.process_dynamic_metadata(
+            {"name": "test", "dynamic": ["requires-python"]},
+            {
+                "requires-python": {
+                    "provider": "dynamic_metadata.plugins.template",
+                    "result": ">={project[nonexistent]}",
+                },
+            },
+        )
+
+
 @pytest.mark.parametrize(
     ("field", "static", "dynamic", "output"),
     [
