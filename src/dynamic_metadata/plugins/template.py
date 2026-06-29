@@ -20,7 +20,6 @@ KEYS = {"field", "result"}
 def dynamic_metadata(
     settings: Mapping[str, Any],
     project: Mapping[str, Any],
-    _build_state: str,
 ) -> dict[str, Any]:
     field = _require_field(settings, KEYS)
 

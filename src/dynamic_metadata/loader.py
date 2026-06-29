@@ -54,8 +54,12 @@ class DynamicMetadataProtocol(Protocol):
         self,
         settings: Mapping[str, Any],
         project: Mapping[str, Any],
-        build_state: BuildState,
     ) -> dict[str, Any]: ...
+
+
+@runtime_checkable
+class DynamicMetadataBuildStateProtocol(DynamicMetadataProtocol, Protocol):
+    def build_state(self, build_state: BuildState) -> None: ...
 
 
 @runtime_checkable
@@ -72,6 +76,7 @@ class DynamicMetadataWheelProtocol(DynamicMetadataProtocol, Protocol):
 
 DMProtocols = Union[
     DynamicMetadataProtocol,
+    DynamicMetadataBuildStateProtocol,
     DynamicMetadataRequirementsProtocol,
     DynamicMetadataWheelProtocol,
 ]
@@ -167,19 +172,31 @@ def load_provider(
     provider: str,
     provider_path: str | None = None,
 ) -> DMProtocols:
+    """Load a provider, returning the object whose hooks are called.
+
+    ``provider`` is either a module path (``"pkg.mod"``) or a module path and a
+    class within it (``"pkg.mod:Class"``). A bare module is returned as-is, so
+    its hooks are plain module-level functions; a class is instantiated with no
+    arguments and the instance is returned, so its hooks are bound methods and
+    may share state through ``self`` (e.g. the optional ``build_state`` hook
+    stashing the build state for ``dynamic_metadata`` to read).
+    """
+    module_name, _, class_name = provider.partition(":")
+
     if provider_path is None:
-        return importlib.import_module(provider)
+        module = importlib.import_module(module_name)
+    else:
+        if not Path(provider_path).is_dir():
+            msg = "provider-path must be an existing directory"
+            raise AssertionError(msg)
+        finder = _ProviderPathFinder([provider_path], module_name)
+        sys.meta_path.insert(0, finder)
+        try:
+            module = importlib.import_module(module_name)
+        finally:
+            sys.meta_path.remove(finder)
 
-    if not Path(provider_path).is_dir():
-        msg = "provider-path must be an existing directory"
-        raise AssertionError(msg)
-
-    finder = _ProviderPathFinder([provider_path], provider)
-    sys.meta_path.insert(0, finder)
-    try:
-        return importlib.import_module(provider)
-    finally:
-        sys.meta_path.remove(finder)
+    return getattr(module, class_name)() if class_name else module
 
 
 def load_dynamic_metadata(
@@ -213,11 +230,12 @@ def process_dynamic_metadata(
     earlier one produced via ``project[...]``. A provider returns a ``dict``
     fragment of the project table (``{field: value, ...}``) which is merged in.
 
-    ``build_state`` is the backend's description of the current build, passed
-    through to each provider. It must be one of these build states
-    (``BUILD_STATES``): ``"sdist"``, ``"wheel"``, ``"editable"``,
-    ``"metadata_wheel"``, or ``"metadata_editable"``. Providers may use it or
-    ignore it.
+    ``build_state`` is the backend's description of the current build. It must
+    be one of these build states (``BUILD_STATES``): ``"sdist"``, ``"wheel"``,
+    ``"editable"``, ``"metadata_wheel"``, or ``"metadata_editable"``. A provider
+    that cares about it implements an optional ``build_state`` hook, called with
+    this value before ``dynamic_metadata``; providers that ignore it simply omit
+    the hook.
     """
 
     if build_state not in BUILD_STATES:
@@ -235,7 +253,9 @@ def process_dynamic_metadata(
     produced: set[str] = set()
 
     for provider, settings in load_dynamic_metadata(entries):
-        fragment = provider.dynamic_metadata(settings, snapshot, build_state)
+        if isinstance(provider, DynamicMetadataBuildStateProtocol):
+            provider.build_state(build_state)
+        fragment = provider.dynamic_metadata(settings, snapshot)
 
         for field in fragment:
             if field not in ALL_FIELDS:

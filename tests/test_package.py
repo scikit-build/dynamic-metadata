@@ -13,12 +13,31 @@ def test_load_provider_path_loads_local(tmp_path: Path) -> None:
     plugin_dir = tmp_path / "plugins"
     plugin_dir.mkdir()
     (plugin_dir / "local_prov_ok.py").write_text(
-        "def dynamic_metadata(settings, project, build_state):\n"
-        "    return {'version': '1.2.3'}\n"
+        "def dynamic_metadata(settings, project):\n    return {'version': '1.2.3'}\n"
     )
 
     provider = dynamic_metadata.loader.load_provider("local_prov_ok", str(plugin_dir))
-    assert provider.dynamic_metadata({}, {}, "wheel") == {"version": "1.2.3"}
+    assert provider.dynamic_metadata({}, {}) == {"version": "1.2.3"}
+
+
+def test_load_provider_class_is_instantiated(tmp_path: Path) -> None:
+    # A "module:Class" provider is imported and instantiated; its hooks are
+    # bound methods that may share state through ``self``.
+    plugin_dir = tmp_path / "plugins"
+    plugin_dir.mkdir()
+    (plugin_dir / "class_prov.py").write_text(
+        "class Provider:\n"
+        "    def dynamic_metadata(self, settings, project):\n"
+        "        return {'version': '1.2.3'}\n"
+    )
+
+    pyproject = dynamic_metadata.loader.process_dynamic_metadata(
+        {"name": "test", "dynamic": ["version"]},
+        [{"provider": "class_prov:Provider", "provider-path": str(plugin_dir)}],
+        "wheel",
+    )
+
+    assert pyproject["version"] == "1.2.3"
 
 
 def test_load_provider_path_not_shadowed(
@@ -164,7 +183,7 @@ def test_provider_sets_multiple_fields(tmp_path: Path) -> None:
     plugin_dir = tmp_path / "plugins"
     plugin_dir.mkdir()
     (plugin_dir / "multi_prov.py").write_text(
-        "def dynamic_metadata(settings, project, build_state):\n"
+        "def dynamic_metadata(settings, project):\n"
         "    return {'version': '1.2.3', 'requires-python': '>=3.8'}\n"
     )
 
@@ -183,8 +202,7 @@ def test_unknown_field_rejected(tmp_path: Path) -> None:
     plugin_dir = tmp_path / "plugins"
     plugin_dir.mkdir()
     (plugin_dir / "bad_field_prov.py").write_text(
-        "def dynamic_metadata(settings, project, build_state):\n"
-        "    return {'not-a-field': 'x'}\n"
+        "def dynamic_metadata(settings, project):\n    return {'not-a-field': 'x'}\n"
     )
 
     with pytest.raises(KeyError, match="settable"):
@@ -199,8 +217,7 @@ def test_field_not_declared_dynamic_rejected(tmp_path: Path) -> None:
     plugin_dir = tmp_path / "plugins"
     plugin_dir.mkdir()
     (plugin_dir / "undeclared_prov.py").write_text(
-        "def dynamic_metadata(settings, project, build_state):\n"
-        "    return {'version': '1.0'}\n"
+        "def dynamic_metadata(settings, project):\n    return {'version': '1.0'}\n"
     )
 
     with pytest.raises(KeyError, match=r"project\.dynamic"):
@@ -277,16 +294,21 @@ def test_regex_rejects_unknown_setting() -> None:
         )
 
 
-def test_build_state_passed_to_provider(tmp_path: Path) -> None:
-    # The backend's build_state string reaches the provider and can drive its
-    # result: recompute for sdist/wheel, reuse a precomputed value otherwise.
+def test_build_state_hook_drives_result(tmp_path: Path) -> None:
+    # A provider with the optional build_state hook is told the build state
+    # before dynamic_metadata, and can drive its result from it: recompute for
+    # sdist/wheel, reuse a precomputed value otherwise. A class provider stashes
+    # the state on ``self`` for dynamic_metadata to read.
     plugin_dir = tmp_path / "plugins"
     plugin_dir.mkdir()
     (plugin_dir / "build_state_prov.py").write_text(
-        "def dynamic_metadata(settings, project, build_state):\n"
-        "    if build_state in {'sdist', 'wheel'}:\n"
-        "        return {'version': 'computed'}\n"
-        "    return {'version': 'reused'}\n"
+        "class Provider:\n"
+        "    def build_state(self, build_state):\n"
+        "        self.build_state = build_state\n"
+        "    def dynamic_metadata(self, settings, project):\n"
+        "        if self.build_state in {'sdist', 'wheel'}:\n"
+        "            return {'version': 'computed'}\n"
+        "        return {'version': 'reused'}\n"
     )
 
     def run(build_state: dynamic_metadata.loader.BuildState) -> Any:
@@ -294,7 +316,7 @@ def test_build_state_passed_to_provider(tmp_path: Path) -> None:
             {"name": "test", "dynamic": ["version"]},
             [
                 {
-                    "provider": "build_state_prov",
+                    "provider": "build_state_prov:Provider",
                     "provider-path": str(plugin_dir),
                 },
             ],

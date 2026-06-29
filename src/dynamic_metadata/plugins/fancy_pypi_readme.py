@@ -18,7 +18,6 @@ def __dir__() -> list[str]:
 def dynamic_metadata(
     settings: dict[str, list[str] | str],
     project: Mapping[str, Any],
-    _build_state: str,
 ) -> dict[str, Any]:
     from hatch_fancy_pypi_readme._builder import build_text
     from hatch_fancy_pypi_readme._config import load_and_validate_config

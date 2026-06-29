@@ -10,7 +10,6 @@ def __dir__() -> list[str]:
 def dynamic_metadata(
     settings: dict[str, object],
     _project: dict[str, object],
-    _build_state: str,
 ) -> dict[str, object]:
     # this is a classic implementation, waiting for the release of
     # vcs-versioning and an improved public interface

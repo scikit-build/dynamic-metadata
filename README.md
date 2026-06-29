@@ -20,13 +20,15 @@ https://github.com/scikit-build/scikit-build-core/issues/230.
 ## For users
 
 Plugins are configured as an **ordered array of tables**,
-`[[tool.dynamic-metadata]]`. Each entry must specify a `provider` (a module
-exposing the API in the next section); everything else in the entry is passed to
-that plugin as settings.
+`[[tool.dynamic-metadata]]`. Each entry must specify a `provider` exposing the
+API in the next section; everything else in the entry is passed to that plugin
+as settings. A `provider` is either a module (`"<module>"`) or a class within a
+module (`"<module>:<Class>"`); a class is instantiated and its hooks are called
+as methods.
 
 ```toml
 [[tool.dynamic-metadata]]
-provider = "<module>"
+provider = "<module>"        # or "<module>:<Class>"
 # ... plugin settings ...
 ```
 
@@ -107,13 +109,15 @@ runtime, along with a reference implementation that you can either use as an
 example, or use directly if you are fine to require the dependency.
 
 Like PEP 517's hooks, `dynamic-metadata` defines a set of hooks that you can
-implement; one required hook and two optional hooks. The required hook is:
+implement; one required hook and three optional hooks. A provider is either a
+module exposing these hooks as functions, or a class (`"<module>:<Class>"`)
+exposing them as methods — a class is instantiated with no arguments, so its
+hooks share state through `self`. The required hook is:
 
 ```python
 def dynamic_metadata(
     settings: Mapping[str, Any],
     project: Mapping[str, Any],
-    build_state: str,
 ) -> dict[str, Any]: ...  # return a fragment of [project], e.g. {"version": ...}
 ```
 
@@ -130,14 +134,24 @@ setting. `project` is a read-only mapping of the project as resolved so far;
 read another field's value with `project["version"]`. The backend calls this
 hook in the same directory as PEP 517's hooks.
 
+There are three optional hooks.
+
+A plugin can receive the current build state:
+
+```python
+def build_state(
+    build_state: str,
+) -> None: ...  # called before dynamic_metadata with the current build state
+```
+
 `build_state` is a string the backend supplies describing the current build. It
 must be one of scikit-build-core's five build states: `"sdist"`, `"wheel"`,
 `"editable"`, `"metadata_wheel"`, or `"metadata_editable"` (the latter two are
-the `prepare_metadata_for_build_*` phases). A plugin may use it — for example to
-reuse a value already computed in an SDist's `PKG-INFO` instead of recomputing
-it for the wheel — or ignore it.
-
-There are two optional hooks.
+the `prepare_metadata_for_build_*` phases). This hook is called once, before
+`dynamic_metadata`. A plugin may use it — for example to reuse a value already
+computed in an SDist's `PKG-INFO` instead of recomputing it for the wheel — by
+stashing it (typically on `self` in a class provider) for `dynamic_metadata` to
+read; a plugin that does not care simply omits this hook.
 
 A plugin can return METADATA 2.2 dynamic status:
 
@@ -172,7 +186,6 @@ Here is a simplified version of the regex plugin:
 def dynamic_metadata(
     settings: Mapping[str, Any],
     _project: Mapping[str, Any],
-    _build_state: str,
 ) -> dict[str, Any]:
     # Input validation
     if settings.keys() - {"field", "input", "regex"}:

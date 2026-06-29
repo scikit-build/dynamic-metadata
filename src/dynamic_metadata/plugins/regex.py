@@ -30,7 +30,6 @@ def _process(match: re.Match[str], remove: str, result: str) -> str:
 def dynamic_metadata(
     settings: Mapping[str, Any],
     _project: Mapping[str, Any],
-    _build_state: str,
 ) -> dict[str, Any]:
     # Input validation
     field = _require_field(settings, KEYS)
