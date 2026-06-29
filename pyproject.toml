@@ -52,7 +52,7 @@ test = [
 dev = [{ include-group = "test" }]
 docs = [
   "sphinx>=4.0",
-  "myst_parser>=0.13",
+  "myst_parser>=5.1; python_version>='3.11'",
   "sphinx_book_theme>=0.1.0",
   "sphinx_copybutton",
   "sphinx_autodoc_typehints",

@@ -10,9 +10,6 @@
 
 <!-- SPHINX-START -->
 
-This repo is to support
-https://github.com/scikit-build/scikit-build-core/issues/230.
-
 > [!WARNING]
 >
 > This is still a WiP! The design may still change.
@@ -20,7 +17,11 @@ https://github.com/scikit-build/scikit-build-core/issues/230.
 `dynamic-metadata` defines a plugin protocol that lets a Python build backend
 compute `[project]` fields (version, readme, dependencies, …) at build time.
 Plugins are configured as an **ordered array of tables**,
-`[[tool.dynamic-metadata]]`, each naming a `provider`:
+`[[tool.dynamic-metadata]]`, each naming a `provider`. Entries run **in order**,
+so a later entry sees every field an earlier entry produced.
+
+A minimal example reads the version out of a file with the bundled `regex`
+plugin:
 
 ```toml
 [project]
@@ -30,6 +31,17 @@ dynamic = ["version"]
 provider = "dynamic_metadata.plugins.regex"
 field = "version"
 input = "src/my_package/__init__.py"
+```
+
+Because entries run in order, a later one can reference an earlier result. Here
+the `template` plugin builds a description from the name and the version
+produced above:
+
+```toml
+[[tool.dynamic-metadata]]
+provider = "dynamic_metadata.plugins.template"
+field = "description"
+result = "This is {project[name]}, version {project[version]}"
 ```
 
 Your build backend _must support_ dynamic-metadata for this to work. Build
