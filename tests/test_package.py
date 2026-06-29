@@ -337,6 +337,53 @@ def test_build_state_rejects_unknown_value() -> None:
         )
 
 
+def test_load_dynamic_metadata_aggregates_requires_and_wheel(
+    tmp_path: Path,
+) -> None:
+    # The backend-author pattern (see docs/backend_authors.md): iterate
+    # load_dynamic_metadata and use the runtime-checkable protocols to collect
+    # each provider's extra build requirements and METADATA 2.2 dynamic status.
+    # A provider implementing neither hook is simply skipped.
+    plugin_dir = tmp_path / "plugins"
+    plugin_dir.mkdir()
+    (plugin_dir / "full_prov.py").write_text(
+        "class Provider:\n"
+        "    def get_requires_for_dynamic_metadata(self, settings):\n"
+        "        return ['some-dep>=1']\n"
+        "    def dynamic_wheel(self, settings):\n"
+        "        return {'version': False, 'dependencies': True}\n"
+        "    def dynamic_metadata(self, settings, project):\n"
+        "        return {'version': '1.2.3'}\n"
+    )
+    (plugin_dir / "bare_prov.py").write_text(
+        "def dynamic_metadata(settings, project):\n    return {'description': 'hi'}\n"
+    )
+
+    entries = [
+        {"provider": "full_prov:Provider", "provider-path": str(plugin_dir)},
+        {"provider": "bare_prov", "provider-path": str(plugin_dir)},
+    ]
+
+    requires = []
+    dynamic_wheel = {}
+    for provider, settings in dynamic_metadata.loader.load_dynamic_metadata(entries):
+        if isinstance(
+            provider,
+            dynamic_metadata.loader.DynamicMetadataRequirementsProtocol,
+        ):
+            requires += provider.get_requires_for_dynamic_metadata(settings)
+        if isinstance(provider, dynamic_metadata.loader.DynamicMetadataWheelProtocol):
+            dynamic_wheel.update(provider.dynamic_wheel(settings))
+
+    assert requires == ["some-dep>=1"]
+    assert dynamic_wheel == {"version": False, "dependencies": True}
+
+
+def test_load_dynamic_metadata_requires_provider_key() -> None:
+    with pytest.raises(KeyError, match="must set a 'provider'"):
+        list(dynamic_metadata.loader.load_dynamic_metadata([{"field": "version"}]))
+
+
 def test_pep808_extends_static_dependencies() -> None:
     # PEP 808: a field may be both static and dynamic; the provider only adds.
     pyproject = dynamic_metadata.loader.process_dynamic_metadata(
