@@ -5,7 +5,7 @@ import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from . import _process_dynamic_metadata
+from . import _process_dynamic_metadata, _require_field
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -17,7 +17,7 @@ def __dir__() -> list[str]:
     return __all__
 
 
-KEYS = {"input", "regex", "result", "remove"}
+KEYS = {"field", "input", "regex", "result", "remove"}
 
 
 def _process(match: re.Match[str], remove: str, result: str) -> str:
@@ -28,15 +28,11 @@ def _process(match: re.Match[str], remove: str, result: str) -> str:
 
 
 def dynamic_metadata(
-    field: str,
     settings: Mapping[str, Any],
     _project: Mapping[str, Any],
-    _build_state: str,
-) -> str:
+) -> dict[str, Any]:
     # Input validation
-    if settings.keys() - KEYS:
-        msg = f"Only {KEYS} settings allowed by this plugin"
-        raise RuntimeError(msg)
+    field = _require_field(settings, KEYS)
     if "input" not in settings:
         msg = "Must contain the 'input' setting to perform a regex on"
         raise RuntimeError(msg)
@@ -64,6 +60,8 @@ def dynamic_metadata(
         msg = f"Couldn't find {regex!r} in {input_filename}"
         raise RuntimeError(msg)
 
-    return _process_dynamic_metadata(
-        field, functools.partial(_process, match, remove), result
-    )
+    return {
+        field: _process_dynamic_metadata(
+            field, functools.partial(_process, match, remove), result
+        )
+    }

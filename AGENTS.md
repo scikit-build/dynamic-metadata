@@ -10,8 +10,10 @@ is still WiP and may change.
 
 The library is split into three audiences (see README.md):
 
-- **Users** configure plugins under `[tool.dynamic-metadata.<field-name>]` with
-  a `provider` (module path) and optional `provider-path` (local dir).
+- **Users** configure plugins as an ordered array of tables,
+  `[[tool.dynamic-metadata]]`, each with a `provider` (a module, or a
+  `module:Class`) and optional `provider-path` (local dir). Entries run in
+  order.
 - **Plugin authors** implement the hooks; they do _not_ need to depend on this
   package at runtime.
 - **Backend authors** consume `loader.py` to drive plugins; they also do not
@@ -43,12 +45,22 @@ warnings as errors and uses `--strict-markers --strict-config`.
 
 ### The plugin protocol
 
-A plugin is any module exposing
-`dynamic_metadata(field, settings, project) -> value`. Two optional hooks:
-`dynamic_wheel(field, settings) -> bool` (METADATA 2.2 dynamic status; version
-must be false) and `get_requires_for_dynamic_metadata(settings) -> list[str]`
-(extra build requirements). Protocols are defined in `loader.py`
-(`DynamicMetadataProtocol` and subclasses).
+A provider is either a module or a class (`provider = "module:Class"`); a class
+is instantiated with no args by `load_provider` and its hooks are bound methods
+(so they can share state via `self`). The one required hook is
+`dynamic_metadata(settings, project) -> dict[str, Any]`. It returns a fragment
+of the `[project]` table (`{field: value, ...}`), so one plugin may set several
+fields. Three optional hooks: `build_state(build_state) -> None` (called once
+before `dynamic_metadata` with the current build state — a provider that cares
+stashes it, typically on `self`; the loader detects it via
+`isinstance(provider, DynamicMetadataBuildStateProtocol)`),
+`dynamic_wheel(settings) -> dict[str, bool]` (per-field METADATA 2.2 dynamic
+status; version must be false) and
+`get_requires_for_dynamic_metadata(settings) -> list[str]` (extra build
+requirements). Protocols are defined in `loader.py` (`DynamicMetadataProtocol`
+and subclasses). There is no `field` argument: generic plugins (`regex`,
+`template`) read their target from a `field` setting; single-purpose plugins
+hardcode it.
 
 ### Field taxonomy — `info.py`
 
@@ -58,16 +70,19 @@ dynamic and what _shape_ their value has: `STR_FIELDS`, `LIST_STR_FIELDS`,
 `entry-points`, `optional-dependencies`. `name` and `dynamic` are intentionally
 excluded. `ALL_FIELDS` is the union and is what `loader.py` validates against.
 
-### Lazy, ordered resolution — `loader.py`
+### Ordered resolution — `loader.py`
 
-`process_dynamic_metadata(project, metadata)` is the entry point. The key design
-is `DynamicPyProject`, a `Mapping` that resolves providers **lazily on
-`__getitem__`**. This lets one plugin request another field via
-`project["other-field"]`; the dependency is computed on demand and removed from
-`dynamic`. Resolution order is therefore data-driven, not declaration order (see
-`test_template_needs`). Circular/missing dependencies are detected because a
-provider is `pop`-ed from `self.providers` before it runs — a re-entrant request
-for a not-yet-resolved, no-longer-pending key raises.
+`process_dynamic_metadata(project, entries, build_state)` is the entry point.
+`entries` is the **ordered list** of `[[tool.dynamic-metadata]]` tables. It
+builds a plain `dict` and applies entries in order: each provider gets a
+read-only `MappingProxyType` snapshot of the project resolved so far, so a later
+entry reads an earlier one's result with `project[...]` (a forward reference is
+just a `KeyError`; cycles are structurally impossible). The returned fragment is
+merged per field by `_merge_metadata` — lists append, tables add keys (PEP 808
+add-only), and a single-value field is replaced if a later entry targets it (a
+`produced` set distinguishes a prior entry's result from a static value, which
+for a scalar is the rejected static+dynamic case). Each resolved field is
+removed from `dynamic`.
 
 ### Shared value-shaping helper — `plugins/__init__.py`
 
@@ -83,7 +98,7 @@ encouraged to reuse or vendor.
 - `regex.py` — extract a value from a file via regex (default targets
   `__version__`/`VERSION`).
 - `template.py` — `str.format` substitution using `{project[...]}`,
-  demonstrating cross-field references.
+  demonstrating cross-field references (reading earlier entries' results).
 - `setuptools_scm.py` / `fancy_pypi_readme.py` — wrap external tools; both
   lazy-import their dependency inside the hook and declare it via
   `get_requires_for_dynamic_metadata`.

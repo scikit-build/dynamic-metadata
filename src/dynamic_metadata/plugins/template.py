@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-from . import _process_dynamic_metadata
+from . import _process_dynamic_metadata, _require_field
 
 __all__ = ["dynamic_metadata"]
 
@@ -14,18 +14,14 @@ def __dir__() -> list[str]:
     return __all__
 
 
-KEYS = {"result"}
+KEYS = {"field", "result"}
 
 
 def dynamic_metadata(
-    field: str,
-    settings: Mapping[str, str | list[str] | dict[str, str] | dict[str, list[str]]],
+    settings: Mapping[str, Any],
     project: Mapping[str, Any],
-    _build_state: str,
-) -> str | list[str] | dict[str, str] | dict[str, list[str]]:
-    if settings.keys() - KEYS:
-        msg = f"Only {KEYS} settings allowed by this plugin"
-        raise RuntimeError(msg)
+) -> dict[str, Any]:
+    field = _require_field(settings, KEYS)
 
     if "result" not in settings:
         msg = "Must contain the 'result' setting with a template substitution"
@@ -33,8 +29,10 @@ def dynamic_metadata(
 
     result = settings["result"]
 
-    return _process_dynamic_metadata(
-        field,
-        lambda r: r.format(project=project),
-        result,
-    )
+    return {
+        field: _process_dynamic_metadata(
+            field,
+            lambda r: r.format(project=project),
+            result,
+        )
+    }
