@@ -53,7 +53,6 @@ repos:
         files: src|tests
         args: []
         additional_dependencies:
-          - hatch-fancy-pypi-readme
           - importlib_resources
           - pytest<9 # Python 3.10
           - tomli

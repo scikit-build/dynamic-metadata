@@ -99,9 +99,6 @@ encouraged to reuse or vendor.
   `__version__`/`VERSION`).
 - `template.py` — `str.format` substitution using `{project[...]}`,
   demonstrating cross-field references (reading earlier entries' results).
-- `setuptools_scm.py` / `fancy_pypi_readme.py` — wrap external tools; both
-  lazy-import their dependency inside the hook and declare it via
-  `get_requires_for_dynamic_metadata`.
 
 ### Schema — `schema.py` + `resources/toml_schema.json`
 

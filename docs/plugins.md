@@ -1,9 +1,8 @@
 # Bundled plugins
 
-This package ships a handful of plugins. Two are generic (they read their target
-from a `field` setting and can write any field), and two wrap external tools.
-Because they live inside `dynamic-metadata`, you must add `dynamic-metadata` to
-your `[build-system].requires` to use them.
+This package ships two generic plugins. They read their target from a `field`
+setting and can write any field. Because they live inside `dynamic-metadata`,
+you must add `dynamic-metadata` to your `[build-system].requires` to use them.
 
 ## `regex`
 
@@ -56,47 +55,5 @@ Settings:
 
 Only fields produced by earlier entries (or static values already in
 `[project]`) are available — a forward reference raises a `KeyError`.
-
-## `setuptools_scm`
-
-`dynamic_metadata.plugins.setuptools_scm` wraps [setuptools-scm][] to derive the
-version from your version control system. It takes no inline settings; configure
-it through setuptools-scm's own `[tool.setuptools_scm]` table. The dependency is
-declared via `get_requires_for_dynamic_metadata`, so the backend installs it
-automatically.
-
-```toml
-[project]
-dynamic = ["version"]
-
-[[tool.dynamic-metadata]]
-provider = "dynamic_metadata.plugins.setuptools_scm"
-
-[tool.setuptools_scm]
-```
-
-## `fancy_pypi_readme`
-
-`dynamic_metadata.plugins.fancy_pypi_readme` wraps [hatch-fancy-pypi-readme][]
-to build a `readme`. It takes no inline settings; configure it through the
-`[tool.hatch.metadata.hooks.fancy-pypi-readme]` table. The dependency
-(`hatch-fancy-pypi-readme>=22.3`) is declared via
-`get_requires_for_dynamic_metadata`. Substitutions can reference the resolved
-`version`, so place this entry after the one that produces it.
-
-```toml
-[project]
-dynamic = ["readme"]
-
-[[tool.dynamic-metadata]]
-provider = "dynamic_metadata.plugins.fancy_pypi_readme"
-
-[tool.hatch.metadata.hooks.fancy-pypi-readme]
-content-type = "text/markdown"
-# ... fragments and substitutions ...
-```
-
-[setuptools-scm]: https://setuptools-scm.readthedocs.io
-[hatch-fancy-pypi-readme]: https://github.com/hynek/hatch-fancy-pypi-readme
 
 </content>

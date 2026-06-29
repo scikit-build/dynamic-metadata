@@ -99,8 +99,8 @@ equivalent:
 ## Collecting build requirements
 
 In your `get_requires_for_build_*` hooks, load each provider and union in
-anything it asks for. This is how `setuptools_scm` and `fancy_pypi_readme` get
-their dependency installed without the user listing it.
+anything it asks for. This is how a provider that wraps an external tool gets
+its dependency installed without the user listing it.
 
 ```python
 from dynamic_metadata.loader import (
