@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Mapping
+from typing import TYPE_CHECKING, Any
 
 from .._compat import tomllib
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 __all__ = [
     "dynamic_metadata",
@@ -16,7 +19,7 @@ def __dir__() -> list[str]:
 
 
 def dynamic_metadata(
-    settings: dict[str, list[str] | str],
+    settings: dict[str, object],
     project: Mapping[str, Any],
 ) -> dict[str, Any]:
     from hatch_fancy_pypi_readme._builder import build_text

@@ -57,15 +57,17 @@ dynamic = ["version"]
 provider = "dynamic_metadata.plugins.regex"
 field = "version"
 input = "src/my_package/__init__.py"
-regex = '(?i)^(__version__|VERSION) *= *([\'"])v?(?P<value>.+?)\2'
 ```
 
 Since this plugin lives inside `dynamic-metadata`, you have to include that in
 your requirements. Make sure the field is marked dynamic in your project table.
-The settings are defined by the plugin; this one takes the target `field`, a
-required `input` file, and an optional `regex` (which defaults to the expression
-above). The regex needs a `"value"` named group (`?P<value>`), which it will
-set.
+The settings are defined by the plugin; this one takes the target `field` and a
+required `input` file. The optional `regex` defaults to an expression that
+matches `__version__`/`VERSION` (with an optional `: str` annotation) and
+captures a `"value"` named group (`?P<value>`); supply your own to extract from
+a different pattern, keeping a `"value"` group. The optional `result` is a
+`str.format` template over the match (default `"{value}"`, with access to every
+numbered and named group), and `remove` is a regex stripped from the result.
 
 ### Mixing static and dynamic values (PEP 808)
 

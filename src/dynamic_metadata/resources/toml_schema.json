@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema",
-  "$id": "https://github.com/scikit-build/dynamic-metadata/blob/main/src/dynamic-metadata/resources/toml_schema.json",
+  "$id": "https://github.com/scikit-build/dynamic-metadata/blob/main/src/dynamic_metadata/resources/toml_schema.json",
   "description": "Dynamic metadata plugin configuration.",
   "type": "array",
   "items": { "$ref": "#/$defs/entry" },

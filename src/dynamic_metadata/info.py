@@ -65,16 +65,7 @@ ALL_FIELDS = (
 )
 
 # Fields that PEP 808 allows to be given statically in [project] *and* listed in
-# dynamic, letting a provider only add to the static portion. String fields and
-# readme have a single value and so cannot be extended.
-EXTENDABLE_FIELDS = (
-    LIST_STR_FIELDS
-    | DICT_STR_FIELDS
-    | LIST_DICT_FIELDS
-    | frozenset(
-        [
-            "optional-dependencies",
-            "entry-points",
-        ]
-    )
-)
+# dynamic, letting a provider only add to the static portion: everything except
+# the scalar fields (string fields and readme), which hold a single value and so
+# cannot be extended.
+EXTENDABLE_FIELDS = ALL_FIELDS - SCALAR_FIELDS
