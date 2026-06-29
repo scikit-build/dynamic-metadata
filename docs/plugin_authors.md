@@ -26,12 +26,12 @@ mapping of field name to value, such as `{"version": "1.2.3"}` or
 plugin may set several fields at once, and every returned field must be listed
 in `[project].dynamic`.
 
-The hook does not receive a `field` argument: a single-purpose plugin
-(`setuptools_scm`, `fancy_pypi_readme`) hardcodes which field it produces, while
-a generic plugin (`regex`, `template`) reads the target field from a `field`
-setting. `project` is a read-only mapping of the project as resolved so far;
-read another field's value with `project["version"]`. The backend calls this
-hook in the same directory as PEP 517's hooks.
+The hook does not receive a `field` argument: a single-purpose plugin hardcodes
+which field it produces, while a generic plugin (`regex`, `template`) reads the
+target field from a `field` setting. `project` is a read-only mapping of the
+project as resolved so far; read another field's value with
+`project["version"]`. The backend calls this hook in the same directory as PEP
+517's hooks.
 
 ## Optional hooks
 
