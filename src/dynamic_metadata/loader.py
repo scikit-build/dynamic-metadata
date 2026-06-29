@@ -188,7 +188,7 @@ def load_provider(
     else:
         if not Path(provider_path).is_dir():
             msg = "provider-path must be an existing directory"
-            raise AssertionError(msg)
+            raise ValueError(msg)
         finder = _ProviderPathFinder([provider_path], module_name)
         sys.meta_path.insert(0, finder)
         try:
