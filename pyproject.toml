@@ -1,6 +1,6 @@
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["flit-core >=3.11"]
+build-backend = "flit_core.buildapi"
 
 
 [project]
@@ -44,6 +44,20 @@ Changelog = "https://github.com/scikit-build/dynamic-metadata/releases"
 [project.entry-points."validate_pyproject.tool_schema"]
 dynamic-metadata = "dynamic_metadata.schema:get_schema"
 
+[tool.flit.sdist]
+include = ["tests/**/*.py"]
+exclude = ["**/*.egg-info"]
+
+[tool.check-sdist]
+git-only = [
+  ".git_archival.txt",
+  ".gitattributes",
+  ".gitignore",
+  "AGENTS.md",
+  "docs/",
+  "uv.lock",
+]
+
 [dependency-groups]
 test = [
   "pytest >=7",
@@ -58,10 +72,6 @@ docs = [
   "sphinx_autodoc_typehints",
   "furo",
 ]
-
-[tool.hatch]
-version.path = "src/dynamic_metadata/__init__.py"
-
 
 [tool.pytest.ini_options]
 minversion = "7.0"

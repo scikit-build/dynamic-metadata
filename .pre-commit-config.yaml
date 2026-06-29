@@ -58,6 +58,14 @@ repos:
           - pytest<9 # Python 3.10
           - tomli
 
+  - repo: https://github.com/henryiii/check-sdist
+    rev: "v1.5.0"
+    hooks:
+      - id: check-sdist
+        args: [--inject-junk]
+        additional_dependencies:
+          - flit-core
+
   - repo: https://github.com/codespell-project/codespell
     rev: "v2.4.2"
     hooks:
