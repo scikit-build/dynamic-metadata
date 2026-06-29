@@ -47,8 +47,8 @@ input = "src/my_package/__init__.py"
 
 Since this plugin lives inside `dynamic-metadata`, you have to include that in
 your requirements. Make sure the field is marked dynamic in your project table.
-The settings are defined by the plugin; see [Bundled plugins](plugins.md) for the
-full list of settings each one accepts.
+The settings are defined by the plugin; see [Bundled plugins](plugins.md) for
+the full list of settings each one accepts.
 
 ## Mixing static and dynamic values (PEP 808)
 
@@ -69,19 +69,20 @@ field = "dependencies"
 
 The provider returns only its additions; the loader merges them onto the current
 value, with existing entries kept first and the provider's entries appended
-verbatim. A provider may read the value of any field already resolved (the static
-value of the field it is extending, or any field produced by an earlier entry)
-via `project[...]` to decide what to add; reading a field that has not been
-produced yet raises a `KeyError`. For tables (`urls`, `scripts`, `entry-points`,
-`optional-dependencies`, …) the provider may add keys but not change the value of
-an existing one.
+verbatim. A provider may read the value of any field already resolved (the
+static value of the field it is extending, or any field produced by an earlier
+entry) via `project[...]` to decide what to add; reading a field that has not
+been produced yet raises a `KeyError`. For tables (`urls`, `scripts`,
+`entry-points`, `optional-dependencies`, …) the provider may add keys but not
+change the value of an existing one.
 
 This add-only merge applies to every list/table field. The single-value fields
 (`version`, `description`, `requires-python`, `license`, and `readme`) cannot be
-extended, so they may not be both static and dynamic; a later entry targeting one
-of them instead **replaces** the value (a transform pipeline — for example, one
-plugin extracts a version and a later one normalizes it).
+extended, so they may not be both static and dynamic; a later entry targeting
+one of them instead **replaces** the value (a transform pipeline — for example,
+one plugin extracts a version and a later one normalizes it).
 
 [PEP 808]: https://peps.python.org/pep-0808/
+
 </content>
 </invoke>

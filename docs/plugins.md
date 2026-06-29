@@ -23,13 +23,13 @@ input = "src/my_package/__init__.py"
 
 Settings (all values must be strings):
 
-| Setting  | Required           | Description                                                                                                                                  |
-| -------- | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `field`  | yes                | The metadata field to set.                                                                                                                   |
-| `input`  | yes                | The file to read.                                                                                                                            |
-| `regex`  | unless version     | The pattern to search for. Must capture a `value` named group (`?P<value>`). Defaults to matching `__version__`/`VERSION` (optionally `: str`-annotated). |
-| `result` | no (`"{value}"`)   | A `str.format` template over the match, with access to every numbered and named group.                                                       |
-| `remove` | no                 | A regex stripped from the result.                                                                                                            |
+| Setting  | Required         | Description                                                                                                                                               |
+| -------- | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `field`  | yes              | The metadata field to set.                                                                                                                                |
+| `input`  | yes              | The file to read.                                                                                                                                         |
+| `regex`  | unless version   | The pattern to search for. Must capture a `value` named group (`?P<value>`). Defaults to matching `__version__`/`VERSION` (optionally `: str`-annotated). |
+| `result` | no (`"{value}"`) | A `str.format` template over the match, with access to every numbered and named group.                                                                    |
+| `remove` | no               | A regex stripped from the result.                                                                                                                         |
 
 The search runs in `re.MULTILINE` mode. When the target `field` is not a string
 field, `result` is applied across the container shape the field requires (each
@@ -49,9 +49,9 @@ result = "{project[name]} {project[version]}"
 
 Settings:
 
-| Setting  | Required | Description                                                              |
-| -------- | -------- | ------------------------------------------------------------------------ |
-| `field`  | yes      | The metadata field to set.                                               |
+| Setting  | Required | Description                                                               |
+| -------- | -------- | ------------------------------------------------------------------------- |
+| `field`  | yes      | The metadata field to set.                                                |
 | `result` | yes      | A `str.format` template; reference resolved fields with `{project[...]}`. |
 
 Only fields produced by earlier entries (or static values already in
@@ -77,8 +77,8 @@ provider = "dynamic_metadata.plugins.setuptools_scm"
 
 ## `fancy_pypi_readme`
 
-`dynamic_metadata.plugins.fancy_pypi_readme` wraps [hatch-fancy-pypi-readme][] to
-build a `readme`. It takes no inline settings; configure it through the
+`dynamic_metadata.plugins.fancy_pypi_readme` wraps [hatch-fancy-pypi-readme][]
+to build a `readme`. It takes no inline settings; configure it through the
 `[tool.hatch.metadata.hooks.fancy-pypi-readme]` table. The dependency
 (`hatch-fancy-pypi-readme>=22.3`) is declared via
 `get_requires_for_dynamic_metadata`. Substitutions can reference the resolved
@@ -98,4 +98,5 @@ content-type = "text/markdown"
 
 [setuptools-scm]: https://setuptools-scm.readthedocs.io
 [hatch-fancy-pypi-readme]: https://github.com/hynek/hatch-fancy-pypi-readme
+
 </content>

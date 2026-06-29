@@ -1,9 +1,9 @@
 # For plugin authors
 
-**You do not need to depend on dynamic-metadata to write a plugin.** This library
-provides testing and static typing helpers that are not needed at runtime, along
-with a reference implementation that you can either use as an example, or use
-directly if you are fine to require the dependency.
+**You do not need to depend on dynamic-metadata to write a plugin.** This
+library provides testing and static typing helpers that are not needed at
+runtime, along with a reference implementation that you can either use as an
+example, or use directly if you are fine to require the dependency.
 
 Like PEP 517's hooks, `dynamic-metadata` defines a set of hooks that you can
 implement; one required hook and three optional hooks. A provider is either a
@@ -23,15 +23,15 @@ def dynamic_metadata(
 The hook returns a **dict** that is a fragment of the `[project]` table — a
 mapping of field name to value, such as `{"version": "1.2.3"}` or
 `{"dependencies": ["numpy"]}`. The framework merges it into the project. One
-plugin may set several fields at once, and every returned field must be listed in
-`[project].dynamic`.
+plugin may set several fields at once, and every returned field must be listed
+in `[project].dynamic`.
 
 The hook does not receive a `field` argument: a single-purpose plugin
-(`setuptools_scm`, `fancy_pypi_readme`) hardcodes which field it produces, while a
-generic plugin (`regex`, `template`) reads the target field from a `field`
-setting. `project` is a read-only mapping of the project as resolved so far; read
-another field's value with `project["version"]`. The backend calls this hook in
-the same directory as PEP 517's hooks.
+(`setuptools_scm`, `fancy_pypi_readme`) hardcodes which field it produces, while
+a generic plugin (`regex`, `template`) reads the target field from a `field`
+setting. `project` is a read-only mapping of the project as resolved so far;
+read another field's value with `project["version"]`. The backend calls this
+hook in the same directory as PEP 517's hooks.
 
 ## Optional hooks
 
@@ -63,9 +63,10 @@ def dynamic_wheel(
 ```
 
 It returns a map from each field this plugin sets to whether that field's value
-can change between the SDist and the wheel (the METADATA 2.2 feature). A field not
-present defaults to "false", and `"version"` must always be "false". This hook is
-called after the main hook, so you do not need to validate the input here.
+can change between the SDist and the wheel (the METADATA 2.2 feature). A field
+not present defaults to "false", and `"version"` must always be "false". This
+hook is called after the main hook, so you do not need to validate the input
+here.
 
 ### Extra build requirements
 
@@ -120,5 +121,4 @@ helper applies a string-transform `action` across whatever container shape the
 target `field` requires (a string, a list of strings, a table, a table of lists,
 …), validating the shape along the way. The bundled `regex` and `template`
 plugins call it so they only write the transform once. You are encouraged to
-reuse this helper or vendor it.
-</content>
+reuse this helper or vendor it. </content>
