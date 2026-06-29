@@ -24,8 +24,12 @@ A minimal example reads the version out of a file with the bundled `regex`
 plugin:
 
 ```toml
+[build-system]
+requires = ["...", "dynamic-metadata"]
+build-backend = "..."
+
 [project]
-dynamic = ["version"]
+dynamic = ["description", "version"]
 
 [[tool.dynamic-metadata]]
 provider = "dynamic_metadata.plugins.regex"
@@ -48,6 +52,9 @@ Your build backend _must support_ dynamic-metadata for this to work. Build
 backends known to support this currently include:
 
 - scikit-build-core (1.0+)
+
+If you have a build backend, it's easy to add support, you don't even need to
+depend on this project to do it.
 
 The documentation is split by audience:
 
