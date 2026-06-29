@@ -46,8 +46,8 @@ Changelog = "https://github.com/scikit-build/dynamic-metadata/releases"
 dynamic-metadata = "dynamic_metadata.schema:get_schema"
 
 [tool.flit.sdist]
-include = ["tests/**/*.py"]
-exclude = ["**/*.egg-info"]
+include = ["tests/**/*.py", "docs/"]
+exclude = ["**/*.egg-info", "docs/_build"]
 
 [tool.check-sdist]
 git-only = [
@@ -55,7 +55,6 @@ git-only = [
   ".gitattributes",
   ".gitignore",
   "AGENTS.md",
-  "docs/",
   "uv.lock",
 ]
 
