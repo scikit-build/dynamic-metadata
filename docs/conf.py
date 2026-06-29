@@ -35,6 +35,7 @@ html_theme_options = {
 }
 
 myst_enable_extensions = [
+    "alert",
     "colon_fence",
     "deflist",
     "substitution",
