@@ -598,3 +598,329 @@ def test_cli_show_state(
 
     project = json.loads(capsys.readouterr().out)
     assert project["version"] == "sdist"
+
+
+def test_fragment_text_creates_readme() -> None:
+    pyproject = dynamic_metadata.loader.process_dynamic_metadata(
+        {"name": "test", "dynamic": ["readme"]},
+        [{"provider": "dynamic_metadata.plugins.fragment", "text": "# Hello\n"}],
+        "wheel",
+    )
+
+    assert pyproject["readme"] == {"content-type": "text/markdown", "text": "# Hello\n"}
+    assert pyproject["dynamic"] == []
+
+
+def test_fragment_appends_in_order() -> None:
+    pyproject = dynamic_metadata.loader.process_dynamic_metadata(
+        {"name": "test", "dynamic": ["readme"]},
+        [
+            {"provider": "dynamic_metadata.plugins.fragment", "text": "# Title\n\n"},
+            {"provider": "dynamic_metadata.plugins.fragment", "text": "Body.\n"},
+        ],
+        "wheel",
+    )
+
+    assert pyproject["readme"] == {
+        "content-type": "text/markdown",
+        "text": "# Title\n\nBody.\n",
+    }
+
+
+def test_fragment_content_type_carried() -> None:
+    # The creating fragment sets content-type; later fragments keep it.
+    pyproject = dynamic_metadata.loader.process_dynamic_metadata(
+        {"name": "test", "dynamic": ["readme"]},
+        [
+            {
+                "provider": "dynamic_metadata.plugins.fragment",
+                "content-type": "text/x-rst",
+                "text": "Title\n",
+            },
+            {"provider": "dynamic_metadata.plugins.fragment", "text": "more\n"},
+        ],
+        "wheel",
+    )
+
+    assert pyproject["readme"] == {
+        "content-type": "text/x-rst",
+        "text": "Title\nmore\n",
+    }
+
+
+def test_fragment_file_start_after_end_before(tmp_path: Path) -> None:
+    src = tmp_path / "README.md"
+    src.write_text("intro\n<!-- start -->\nkeep me\n<!-- end -->\noutro\n")
+
+    pyproject = dynamic_metadata.loader.process_dynamic_metadata(
+        {"name": "test", "dynamic": ["readme"]},
+        [
+            {
+                "provider": "dynamic_metadata.plugins.fragment",
+                "path": str(src),
+                "start-after": "<!-- start -->\n",
+                "end-before": "<!-- end -->",
+            }
+        ],
+        "wheel",
+    )
+
+    assert pyproject["readme"]["text"] == "keep me\n"
+
+
+def test_fragment_file_start_at_end_at(tmp_path: Path) -> None:
+    src = tmp_path / "f.md"
+    src.write_text("AAA## Heading\nbody\nEND tail")
+
+    pyproject = dynamic_metadata.loader.process_dynamic_metadata(
+        {"name": "test", "dynamic": ["readme"]},
+        [
+            {
+                "provider": "dynamic_metadata.plugins.fragment",
+                "path": str(src),
+                "start-at": "## Heading",
+                "end-at": "END",
+            }
+        ],
+        "wheel",
+    )
+
+    assert pyproject["readme"]["text"] == "## Heading\nbody\nEND"
+
+
+def test_fragment_file_pattern(tmp_path: Path) -> None:
+    src = tmp_path / "CHANGELOG.md"
+    src.write_text("## 1.0\nlatest\n## 0.9\nold\n")
+
+    pyproject = dynamic_metadata.loader.process_dynamic_metadata(
+        {"name": "test", "dynamic": ["readme"]},
+        [
+            {
+                "provider": "dynamic_metadata.plugins.fragment",
+                "path": str(src),
+                "pattern": r"(## 1\.0.*?)(?=\n## )",
+            }
+        ],
+        "wheel",
+    )
+
+    assert pyproject["readme"]["text"] == "## 1.0\nlatest"
+
+
+def test_fragment_rejects_text_and_path() -> None:
+    with pytest.raises(RuntimeError, match="exactly one of 'text' or 'path'"):
+        dynamic_metadata.loader.process_dynamic_metadata(
+            {"name": "test", "dynamic": ["readme"]},
+            [
+                {
+                    "provider": "dynamic_metadata.plugins.fragment",
+                    "text": "x",
+                    "path": "y",
+                }
+            ],
+            "wheel",
+        )
+
+
+def test_fragment_rejects_neither() -> None:
+    with pytest.raises(RuntimeError, match="must set 'text' or 'path'"):
+        dynamic_metadata.loader.process_dynamic_metadata(
+            {"name": "test", "dynamic": ["readme"]},
+            [{"provider": "dynamic_metadata.plugins.fragment"}],
+            "wheel",
+        )
+
+
+def test_fragment_rejects_slicing_without_path() -> None:
+    with pytest.raises(RuntimeError, match="Slicing settings require 'path'"):
+        dynamic_metadata.loader.process_dynamic_metadata(
+            {"name": "test", "dynamic": ["readme"]},
+            [
+                {
+                    "provider": "dynamic_metadata.plugins.fragment",
+                    "text": "x",
+                    "start-after": "y",
+                }
+            ],
+            "wheel",
+        )
+
+
+def test_fragment_rejects_both_starts(tmp_path: Path) -> None:
+    src = tmp_path / "f.md"
+    src.write_text("abc")
+    with pytest.raises(RuntimeError, match="both 'start-after' and 'start-at'"):
+        dynamic_metadata.loader.process_dynamic_metadata(
+            {"name": "test", "dynamic": ["readme"]},
+            [
+                {
+                    "provider": "dynamic_metadata.plugins.fragment",
+                    "path": str(src),
+                    "start-after": "a",
+                    "start-at": "b",
+                }
+            ],
+            "wheel",
+        )
+
+
+def test_fragment_missing_marker(tmp_path: Path) -> None:
+    src = tmp_path / "f.md"
+    src.write_text("nothing to see")
+    with pytest.raises(RuntimeError, match="Could not find 'start-after'"):
+        dynamic_metadata.loader.process_dynamic_metadata(
+            {"name": "test", "dynamic": ["readme"]},
+            [
+                {
+                    "provider": "dynamic_metadata.plugins.fragment",
+                    "path": str(src),
+                    "start-after": "absent",
+                }
+            ],
+            "wheel",
+        )
+
+
+def test_fragment_rejects_unknown_setting() -> None:
+    with pytest.raises(RuntimeError, match="settings allowed"):
+        dynamic_metadata.loader.process_dynamic_metadata(
+            {"name": "test", "dynamic": ["readme"]},
+            [
+                {
+                    "provider": "dynamic_metadata.plugins.fragment",
+                    "text": "x",
+                    "typo": "oops",
+                }
+            ],
+            "wheel",
+        )
+
+
+def test_substitute_readme() -> None:
+    pyproject = dynamic_metadata.loader.process_dynamic_metadata(
+        {"name": "test", "dynamic": ["readme"]},
+        [
+            {"provider": "dynamic_metadata.plugins.fragment", "text": "see #42 now\n"},
+            {
+                "provider": "dynamic_metadata.plugins.substitute",
+                "field": "readme",
+                "pattern": r"#(\d+)",
+                "replacement": r"[#\1](https://x/\1)",
+            },
+        ],
+        "wheel",
+    )
+
+    assert pyproject["readme"]["text"] == "see [#42](https://x/42) now\n"
+
+
+def test_substitute_defaults_to_readme() -> None:
+    pyproject = dynamic_metadata.loader.process_dynamic_metadata(
+        {"name": "test", "dynamic": ["readme"]},
+        [
+            {"provider": "dynamic_metadata.plugins.fragment", "text": "see #42 now\n"},
+            {
+                "provider": "dynamic_metadata.plugins.substitute",
+                "pattern": r"#(\d+)",
+                "replacement": r"gh-\1",
+            },
+        ],
+        "wheel",
+    )
+
+    assert pyproject["readme"]["text"] == "see gh-42 now\n"
+
+
+def test_substitute_str_field() -> None:
+    # substitute transforms a string field produced by an earlier entry.
+    pyproject = dynamic_metadata.loader.process_dynamic_metadata(
+        {"name": "test", "version": "0.1.0", "dynamic": ["description"]},
+        [
+            {
+                "provider": "dynamic_metadata.plugins.template",
+                "field": "description",
+                "result": "Version {project[version]}",
+            },
+            {
+                "provider": "dynamic_metadata.plugins.substitute",
+                "field": "description",
+                "pattern": "Version",
+                "replacement": "v",
+            },
+        ],
+        "wheel",
+    )
+
+    assert pyproject["description"] == "v 0.1.0"
+
+
+def test_substitute_ignore_case() -> None:
+    pyproject = dynamic_metadata.loader.process_dynamic_metadata(
+        {"name": "test", "dynamic": ["readme"]},
+        [
+            {"provider": "dynamic_metadata.plugins.fragment", "text": "Hello HELLO\n"},
+            {
+                "provider": "dynamic_metadata.plugins.substitute",
+                "field": "readme",
+                "pattern": "hello",
+                "replacement": "hi",
+                "ignore-case": True,
+            },
+        ],
+        "wheel",
+    )
+
+    assert pyproject["readme"]["text"] == "hi hi\n"
+
+
+def test_substitute_rejects_non_scalar() -> None:
+    with pytest.raises(RuntimeError, match="cannot be substituted"):
+        dynamic_metadata.loader.process_dynamic_metadata(
+            {"name": "test", "dynamic": ["keywords"]},
+            [
+                {
+                    "provider": "dynamic_metadata.plugins.substitute",
+                    "field": "keywords",
+                    "pattern": "a",
+                    "replacement": "b",
+                }
+            ],
+            "wheel",
+        )
+
+
+def test_substitute_requires_existing_value() -> None:
+    with pytest.raises(RuntimeError, match="must be produced by an earlier entry"):
+        dynamic_metadata.loader.process_dynamic_metadata(
+            {"name": "test", "dynamic": ["readme"]},
+            [
+                {
+                    "provider": "dynamic_metadata.plugins.substitute",
+                    "field": "readme",
+                    "pattern": "a",
+                    "replacement": "b",
+                }
+            ],
+            "wheel",
+        )
+
+
+def test_substitute_rejects_unknown_setting() -> None:
+    with pytest.raises(RuntimeError, match="settings allowed"):
+        dynamic_metadata.loader.process_dynamic_metadata(
+            {"name": "test", "dynamic": ["readme"]},
+            [
+                {
+                    "provider": "dynamic_metadata.plugins.fragment",
+                    "text": "hi\n",
+                },
+                {
+                    "provider": "dynamic_metadata.plugins.substitute",
+                    "field": "readme",
+                    "pattern": "a",
+                    "replacement": "b",
+                    "typo": "oops",
+                },
+            ],
+            "wheel",
+        )
