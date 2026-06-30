@@ -916,3 +916,73 @@ def test_substitute_rejects_unknown_setting() -> None:
             ],
             "wheel",
         )
+
+
+def test_static_sets_fields() -> None:
+    pyproject = dynamic_metadata.loader.process_dynamic_metadata(
+        {"name": "test", "dynamic": ["version", "description", "keywords"]},
+        [
+            {
+                "provider": "dynamic_metadata.plugins.static",
+                "version": "1.2.3",
+                "description": "My package",
+                "keywords": ["a", "b"],
+            }
+        ],
+        "wheel",
+    )
+
+    assert pyproject["version"] == "1.2.3"
+    assert pyproject["description"] == "My package"
+    assert pyproject["keywords"] == ["a", "b"]
+    assert pyproject["dynamic"] == []
+
+
+def test_static_then_substitute() -> None:
+    # The main use: static gives substitute a dynamic value to transform.
+    pyproject = dynamic_metadata.loader.process_dynamic_metadata(
+        {"name": "test", "dynamic": ["version"]},
+        [
+            {
+                "provider": "dynamic_metadata.plugins.static",
+                "version": "1.2.3-beta",
+            },
+            {
+                "provider": "dynamic_metadata.plugins.substitute",
+                "field": "version",
+                "pattern": "-beta$",
+                "replacement": "b0",
+            },
+        ],
+        "wheel",
+    )
+
+    assert pyproject["version"] == "1.2.3b0"
+
+
+def test_static_rejects_unknown_field() -> None:
+    with pytest.raises(KeyError, match="not a settable dynamic-metadata field"):
+        dynamic_metadata.loader.process_dynamic_metadata(
+            {"name": "test", "dynamic": ["version"]},
+            [
+                {
+                    "provider": "dynamic_metadata.plugins.static",
+                    "descriptions": "typo",
+                }
+            ],
+            "wheel",
+        )
+
+
+def test_static_field_must_be_dynamic() -> None:
+    with pytest.raises(KeyError, match=r"must be listed in project\.dynamic"):
+        dynamic_metadata.loader.process_dynamic_metadata(
+            {"name": "test", "dynamic": []},
+            [
+                {
+                    "provider": "dynamic_metadata.plugins.static",
+                    "version": "1.2.3",
+                }
+            ],
+            "wheel",
+        )
