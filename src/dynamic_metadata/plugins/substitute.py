@@ -4,7 +4,7 @@ import re
 from typing import TYPE_CHECKING, Any
 
 from ..info import SCALAR_FIELDS
-from . import _process_dynamic_metadata
+from . import _process_dynamic_metadata, _require_field
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -23,13 +23,7 @@ def dynamic_metadata(
     settings: Mapping[str, Any],
     project: Mapping[str, Any],
 ) -> dict[str, Any]:
-    if settings.keys() - KEYS:
-        msg = f"Only {KEYS} settings allowed by this plugin"
-        raise RuntimeError(msg)
-    field = settings.get("field", "readme")
-    if not isinstance(field, str):
-        msg = "The 'field' setting must be a string"
-        raise RuntimeError(msg)
+    field = _require_field(settings, KEYS)
     # Only scalar fields can be transformed in place: the loader *appends* a
     # produced extendable field, so re-emitting a whole transformed list/table
     # would duplicate it. Scalars are replaced, so the substitution sticks.
