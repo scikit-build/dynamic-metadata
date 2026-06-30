@@ -843,6 +843,101 @@ def test_substitute_str_field() -> None:
     assert pyproject["description"] == "v 0.1.0"
 
 
+def test_substitute_format_references_field() -> None:
+    # With format=true, the replacement pulls in another field via {project[...]}.
+    pyproject = dynamic_metadata.loader.process_dynamic_metadata(
+        {"name": "test", "version": "1.2.3", "dynamic": ["description"]},
+        [
+            {
+                "provider": "dynamic_metadata.plugins.template",
+                "field": "description",
+                "result": "placeholder",
+            },
+            {
+                "provider": "dynamic_metadata.plugins.substitute",
+                "field": "description",
+                "pattern": "placeholder",
+                "replacement": "v{project[version]}",
+                "format": True,
+            },
+        ],
+        "wheel",
+    )
+
+    assert pyproject["description"] == "v1.2.3"
+
+
+def test_substitute_format_with_backreference() -> None:
+    # A regex backreference and a {project[...]} reference coexist in one
+    # replacement: braces and backslashes use disjoint syntax.
+    pyproject = dynamic_metadata.loader.process_dynamic_metadata(
+        {"name": "test", "version": "1.2.3", "dynamic": ["description"]},
+        [
+            {
+                "provider": "dynamic_metadata.plugins.template",
+                "field": "description",
+                "result": "#42",
+            },
+            {
+                "provider": "dynamic_metadata.plugins.substitute",
+                "field": "description",
+                "pattern": r"#(\d+)",
+                "replacement": r"{project[version]}-\1",
+                "format": True,
+            },
+        ],
+        "wheel",
+    )
+
+    assert pyproject["description"] == "1.2.3-42"
+
+
+def test_substitute_no_format_keeps_braces_literal() -> None:
+    # Default (format off): literal braces in the replacement pass through and
+    # are not treated as a format string. This is why format is opt-in.
+    pyproject = dynamic_metadata.loader.process_dynamic_metadata(
+        {"name": "test", "dynamic": ["description"]},
+        [
+            {
+                "provider": "dynamic_metadata.plugins.template",
+                "field": "description",
+                "result": "placeholder",
+            },
+            {
+                "provider": "dynamic_metadata.plugins.substitute",
+                "field": "description",
+                "pattern": "placeholder",
+                "replacement": "x{y}z",
+            },
+        ],
+        "wheel",
+    )
+
+    assert pyproject["description"] == "x{y}z"
+
+
+def test_substitute_format_rejects_non_bool() -> None:
+    with pytest.raises(RuntimeError, match="'format' must be a boolean"):
+        dynamic_metadata.loader.process_dynamic_metadata(
+            {"name": "test", "dynamic": ["description"]},
+            [
+                {
+                    "provider": "dynamic_metadata.plugins.template",
+                    "field": "description",
+                    "result": "placeholder",
+                },
+                {
+                    "provider": "dynamic_metadata.plugins.substitute",
+                    "field": "description",
+                    "pattern": "placeholder",
+                    "replacement": "x",
+                    "format": "yes",
+                },
+            ],
+            "wheel",
+        )
+
+
 def test_substitute_ignore_case() -> None:
     pyproject = dynamic_metadata.loader.process_dynamic_metadata(
         {"name": "test", "dynamic": ["readme"]},

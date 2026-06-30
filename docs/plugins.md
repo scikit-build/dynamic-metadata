@@ -169,12 +169,31 @@ replacement = "[#\\1](https://github.com/org/repo/issues/\\1)"
 
 Settings:
 
-| Setting       | Required     | Description                                                 |
-| ------------- | ------------ | ----------------------------------------------------------- |
-| `field`       | yes          | The field to transform. Must be a scalar field (see below). |
-| `pattern`     | yes          | The regex to replace, applied with `re.sub` (every match).  |
-| `replacement` | yes          | The replacement; backreferences such as `\1` are supported. |
-| `ignore-case` | no (`false`) | Match case-insensitively.                                   |
+| Setting       | Required     | Description                                                       |
+| ------------- | ------------ | ----------------------------------------------------------------- |
+| `field`       | yes          | The field to transform. Must be a scalar field (see below).       |
+| `pattern`     | yes          | The regex to replace, applied with `re.sub` (every match).        |
+| `replacement` | yes          | The replacement; backreferences such as `\1` are supported.       |
+| `ignore-case` | no (`false`) | Match case-insensitively.                                         |
+| `format`      | no (`false`) | Resolve `{project[...]}` references in `replacement` (see below). |
+
+With `format = true`, `replacement` is run through `str.format(project=...)`
+before substitution, so it can pull in fields produced by earlier entries — the
+same `{project[...]}` syntax as [`template`](#template). Backreferences keep
+working alongside it (braces and backslashes don't collide):
+
+```toml
+[[tool.dynamic-metadata]]
+provider = "dynamic_metadata.plugins.substitute"
+field = "readme"
+pattern = "#(\\d+)"
+replacement = "[#\\1](https://github.com/org/repo/v{project[version]}/issues/\\1)"
+format = true
+```
+
+It is opt-in because formatting makes `{` and `}` special: with `format = true`
+a literal brace in the replacement must be doubled (`{{` / `}}`), as with any
+`str.format` string. Leave it off (the default) to use the replacement verbatim.
 
 `field` must be a single-value field — a string field (`version`, `description`,
 `requires-python`, `license`) or `readme` — and must already hold a value from

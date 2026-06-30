@@ -16,7 +16,7 @@ def __dir__() -> list[str]:
     return __all__
 
 
-KEYS = {"field", "pattern", "replacement", "ignore-case"}
+KEYS = {"field", "pattern", "replacement", "ignore-case", "format"}
 
 
 def dynamic_metadata(
@@ -47,12 +47,22 @@ def dynamic_metadata(
         msg = "Setting 'ignore-case' must be a boolean"
         raise RuntimeError(msg)
 
+    do_format = settings.get("format", False)
+    if not isinstance(do_format, bool):
+        msg = "Setting 'format' must be a boolean"
+        raise RuntimeError(msg)
+
     if field not in project:
         msg = f"Field {field!r} must be produced by an earlier entry to substitute"
         raise RuntimeError(msg)
 
     pattern = settings["pattern"]
     replacement = settings["replacement"]
+    # Opt-in: resolve {project[...]} references against the snapshot, mirroring
+    # the template plugin. Off by default so literal braces in a replacement
+    # need no escaping.
+    if do_format:
+        replacement = replacement.format(project=project)
     flags = re.IGNORECASE if ignore_case else 0
 
     return {
