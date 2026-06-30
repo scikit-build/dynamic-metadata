@@ -28,4 +28,4 @@ api/index
 
 - {ref}`genindex`
 - {ref}`modindex`
-- {ref}`search` </content> </invoke>
+- {ref}`search`

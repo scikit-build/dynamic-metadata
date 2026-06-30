@@ -55,5 +55,3 @@ Settings:
 
 Only fields produced by earlier entries (or static values already in
 `[project]`) are available — a forward reference raises a `KeyError`.
-
-</content>

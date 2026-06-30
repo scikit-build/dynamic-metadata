@@ -50,6 +50,46 @@ your requirements. Make sure the field is marked dynamic in your project table.
 The settings are defined by the plugin; see [Bundled plugins](plugins.md) for
 the full list of settings each one accepts.
 
+## Providing a custom plugin
+
+You don't have to publish a plugin, or even put it in an installed package, to
+use one. The optional `provider-path` key names a local directory to import the
+`provider` module from, so a plugin can live right inside your project alongside
+`pyproject.toml`. A provider loaded this way needs no runtime dependency on
+`dynamic-metadata` — it just has to expose the [hooks](plugin_authors.md).
+
+Drop a module in your project — say `scripts/my_plugin.py`:
+
+```python
+def dynamic_metadata(settings, project):
+    return {"version": "1.2.3"}
+```
+
+and point an entry at it with `provider-path`:
+
+```toml
+[project]
+dynamic = ["version"]
+
+[[tool.dynamic-metadata]]
+provider = "my_plugin"
+provider-path = "scripts"
+```
+
+`provider` is still the module name (`my_plugin`, the file without its `.py`),
+and `provider-path` is the directory to find it in (relative to
+`pyproject.toml`). It must be an existing directory, and it is searched in
+isolation: a module of the same name reachable elsewhere on `sys.path` will not
+shadow or substitute for one missing from `provider-path`. A
+`"<module>:<Class>"` provider works the same way — the class is imported from
+`provider-path` and instantiated.
+
+Because the module is imported, make sure any third-party packages it needs are
+available at build time. If they aren't already pulled in by your build backend,
+list them in `[build-system].requires`, or have the plugin declare them from its
+`get_requires_for_dynamic_metadata` hook (see
+[plugin authors](plugin_authors.md)).
+
 ## Inspecting the result
 
 Installing `dynamic-metadata` provides a `dynamic-metadata` command (also
@@ -99,6 +139,3 @@ one of them instead **replaces** the value (a transform pipeline — for example
 one plugin extracts a version and a later one normalizes it).
 
 [PEP 808]: https://peps.python.org/pep-0808/
-
-</content>
-</invoke>

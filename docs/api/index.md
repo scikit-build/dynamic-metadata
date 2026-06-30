@@ -58,5 +58,3 @@ Shared helpers that bundled and third-party plugins can reuse.
    :members:
    :undoc-members:
 ```
-
-</content>
