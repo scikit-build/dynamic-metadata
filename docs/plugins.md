@@ -1,8 +1,17 @@
 # Bundled plugins
 
-This package ships two generic plugins. They read their target from a `field`
-setting and can write any field. Because they live inside `dynamic-metadata`,
-you must add `dynamic-metadata` to your `[build-system].requires` to use them.
+This package ships four plugins. `regex`, `template`, and `substitute` are
+generic — they read their target from a `field` setting. `readme_fragment` is
+single-purpose and always writes `readme`. Because they live inside
+`dynamic-metadata`, you must add `dynamic-metadata` to your
+`[build-system].requires` to use them.
+
+Entries run in order and each sees the project resolved so far, so several
+entries can cooperate on one field: `readme_fragment` and `substitute` build a
+readme the way [hatch-fancy-pypi-readme][] assembles one — one entry per
+fragment or substitution rather than a nested list.
+
+[hatch-fancy-pypi-readme]: https://github.com/hynek/hatch-fancy-pypi-readme
 
 ## `regex`
 
@@ -55,3 +64,86 @@ Settings:
 
 Only fields produced by earlier entries (or static values already in
 `[project]`) are available — a forward reference raises a `KeyError`.
+
+## `readme_fragment`
+
+`dynamic_metadata.plugins.readme_fragment` builds a `readme` from an ordered
+series of fragments, each its own entry. Every entry appends to the readme
+produced by the entries before it, so a heading, a slice of a file, and a
+changelog excerpt can be stitched together. An entry with `text` is a literal
+fragment; an entry with `path` reads a file and may slice it.
+
+```toml
+[project]
+dynamic = ["readme"]
+
+[[tool.dynamic-metadata]]
+provider = "dynamic_metadata.plugins.readme_fragment"
+content-type = "text/markdown"
+text = "# My Project\n\n"
+
+[[tool.dynamic-metadata]]
+provider = "dynamic_metadata.plugins.readme_fragment"
+path = "README.md"
+start-after = "<!-- start -->\n"
+end-before = "\n<!-- end -->"
+
+[[tool.dynamic-metadata]]
+provider = "dynamic_metadata.plugins.readme_fragment"
+path = "CHANGELOG.md"
+pattern = "(## .*?)(?=\n## )"
+```
+
+Settings (all values are strings):
+
+| Setting        | Required             | Description                                                                                       |
+| -------------- | -------------------- | ------------------------------------------------------------------------------------------------- |
+| `text`         | one of text/path     | A literal fragment, used verbatim.                                                                |
+| `path`         | one of text/path     | A file to read (UTF-8) as the fragment, optionally sliced by the keys below.                      |
+| `content-type` | no (`text/markdown`) | The readme content type. Consulted when the first fragment creates the readme.                    |
+| `start-after`  | no                   | Drop everything up to and including this marker (file fragments). Excludes `start-at`.            |
+| `start-at`     | no                   | Drop everything before this marker, keeping it (file fragments). Excludes `start-after`.          |
+| `end-before`   | no                   | Keep everything before this marker (file fragments). Excludes `end-at`.                           |
+| `end-at`       | no                   | Keep everything through this marker (file fragments). Excludes `end-before`.                      |
+| `pattern`      | no                   | A regex searched with `re.DOTALL`; the fragment becomes its first capture group (file fragments). |
+
+Slicing is applied in order: start, then end, then `pattern`. A missing marker
+or a non-matching `pattern` raises a `RuntimeError`.
+
+## `substitute`
+
+`dynamic_metadata.plugins.substitute` applies a single regex substitution to a
+field already produced by an earlier entry, the way fancy-pypi-readme touches up
+an assembled readme (for example, turning `#123` into a link).
+
+```toml
+[[tool.dynamic-metadata]]
+provider = "dynamic_metadata.plugins.substitute"
+field = "readme"
+pattern = "#(\\d+)"
+replacement = "[#\\1](https://github.com/org/repo/issues/\\1)"
+```
+
+Settings:
+
+| Setting       | Required     | Description                                                 |
+| ------------- | ------------ | ----------------------------------------------------------- |
+| `field`       | yes          | The field to transform. Must be a scalar field (see below). |
+| `pattern`     | yes          | The regex to replace, applied with `re.sub` (every match).  |
+| `replacement` | yes          | The replacement; backreferences such as `\1` are supported. |
+| `ignore-case` | no (`false`) | Match case-insensitively.                                   |
+
+`field` must be a single-value field — a string field (`version`, `description`,
+`requires-python`, `license`) or `readme` — and must already hold a value from
+an earlier entry. List and table fields are rejected: the backend _appends_ a
+provider's contribution to those, so re-emitting a whole transformed value would
+duplicate it. For `readme` the substitution is applied across the table, so
+anchor patterns to the body text rather than the content type.
+
+:::{warning}
+
+`substitute` only works on a **dynamic** field produced by an earlier entry. A
+field set statically in `[project]` cannot be modified — a scalar field may not
+be both static and dynamic (PEP 808), so substituting one is an error.
+
+:::
