@@ -1,10 +1,10 @@
 # Bundled plugins
 
-This package ships four plugins. `regex`, `template`, and `substitute` are
-generic — they read their target from a `field` setting. `readme_fragment` is
-single-purpose and always writes `readme`. Because they live inside
-`dynamic-metadata`, you must add `dynamic-metadata` to your
-`[build-system].requires` to use them.
+This package ships five plugins. `regex`, `template`, and `substitute` are
+generic — they read their target from a `field` setting. `static` writes values
+straight from its settings, and `readme_fragment` is single-purpose and always
+writes `readme`. Because they live inside `dynamic-metadata`, you must add
+`dynamic-metadata` to your `[build-system].requires` to use them.
 
 Entries run in order and each sees the project resolved so far, so several
 entries can cooperate on one field: `readme_fragment` and `substitute` build a
@@ -64,6 +64,49 @@ Settings:
 
 Only fields produced by earlier entries (or static values already in
 `[project]`) are available — a forward reference raises a `KeyError`.
+
+## `static`
+
+`dynamic_metadata.plugins.static` sets fields directly from its own settings —
+an alternative to writing them in `[project]`. Each setting is a metadata field
+mapped to its value, returned verbatim.
+
+```toml
+[project]
+dynamic = ["version", "description"]
+
+[[tool.dynamic-metadata]]
+provider = "dynamic_metadata.plugins.static"
+version = "1.2.3"
+description = "My package"
+```
+
+Settings: any settable metadata field maps to the value to give it. The fields
+must be listed in `project.dynamic` like every dynamic field, and values use the
+same shape they would in `[project]` — a string for `version`, a list for
+`keywords`, a table for `readme`, and so on.
+
+This is mainly useful as the first half of a pipeline: it gives a later entry
+like `substitute` a _dynamic_ value to transform, which a field set in
+`[project]` cannot be (a scalar field may not be both static and dynamic).
+
+```toml
+[project]
+dynamic = ["version"]
+
+[[tool.dynamic-metadata]]
+provider = "dynamic_metadata.plugins.static"
+version = "1.2.3-beta"
+
+[[tool.dynamic-metadata]]
+provider = "dynamic_metadata.plugins.substitute"
+field = "version"
+pattern = "-beta$"
+replacement = "b0"
+```
+
+It can also keep metadata out of `[project]`, hiding it from tools that read
+`[project]` directly.
 
 ## `readme_fragment`
 
