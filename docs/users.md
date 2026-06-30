@@ -50,6 +50,22 @@ your requirements. Make sure the field is marked dynamic in your project table.
 The settings are defined by the plugin; see [Bundled plugins](plugins.md) for
 the full list of settings each one accepts.
 
+## Inspecting the result
+
+Installing `dynamic-metadata` provides a `dynamic-metadata` command (also
+runnable as `python -m dynamic_metadata`) for previewing what your plugins
+produce, without invoking the build backend:
+
+```console
+$ dynamic-metadata show
+```
+
+`show` reads `pyproject.toml` from the current directory, runs the configured
+`[[tool.dynamic-metadata]]` entries in order, and prints the resolved
+`[project]` table as JSON. Use `--pyproject-toml PATH` to point at another file
+and `--state` to choose the build state passed to plugins (default
+`metadata_wheel`).
+
 ## Mixing static and dynamic values (PEP 808)
 
 Following [PEP 808][], list and table fields can be given a static value in
