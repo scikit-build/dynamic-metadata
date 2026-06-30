@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
 import pytest
 
+import dynamic_metadata.__main__
 import dynamic_metadata.loader
 import dynamic_metadata.plugins
 
@@ -520,3 +522,79 @@ def test_actions(field: str, input: Any, output: Any) -> None:
         field, lambda x: x.format(sub=42), input
     )
     assert output == result
+
+
+def test_cli_show(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text(
+        "[project]\n"
+        'name = "test"\n'
+        'version = "0.1.0"\n'
+        'dynamic = ["requires-python"]\n'
+        "\n"
+        "[[tool.dynamic-metadata]]\n"
+        'provider = "dynamic_metadata.plugins.template"\n'
+        'field = "requires-python"\n'
+        'result = ">={project[version]}"\n'
+    )
+
+    dynamic_metadata.__main__.main(["show", "--pyproject-toml", str(pyproject)])
+
+    project = json.loads(capsys.readouterr().out)
+    assert project == {
+        "name": "test",
+        "version": "0.1.0",
+        "requires-python": ">=0.1.0",
+        "dynamic": [],
+    }
+
+
+def test_cli_show_no_entries(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # With no [[tool.dynamic-metadata]] entries the static project table is
+    # printed verbatim.
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text('[project]\nname = "test"\nversion = "0.1.0"\n')
+
+    dynamic_metadata.__main__.main(["show", "--pyproject-toml", str(pyproject)])
+
+    project = json.loads(capsys.readouterr().out)
+    assert project == {"name": "test", "version": "0.1.0"}
+
+
+def test_cli_show_state(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # --state is forwarded to the build_state hook.
+    plugin_dir = tmp_path / "plugins"
+    plugin_dir.mkdir()
+    (plugin_dir / "state_prov.py").write_text(
+        "class Provider:\n"
+        "    def build_state(self, build_state):\n"
+        "        self.build_state = build_state\n"
+        "    def dynamic_metadata(self, settings, project):\n"
+        "        return {'version': self.build_state}\n"
+    )
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text(
+        "[project]\n"
+        'name = "test"\n'
+        'dynamic = ["version"]\n'
+        "\n"
+        "[[tool.dynamic-metadata]]\n"
+        'provider = "state_prov:Provider"\n'
+        f"provider-path = {json.dumps(str(plugin_dir))}\n"
+    )
+
+    dynamic_metadata.__main__.main(
+        ["show", "--pyproject-toml", str(pyproject), "--state", "sdist"]
+    )
+
+    project = json.loads(capsys.readouterr().out)
+    assert project["version"] == "sdist"
