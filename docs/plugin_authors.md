@@ -120,5 +120,5 @@ A generic plugin should work for every field type, not just strings. The
 helper applies a string-transform `action` across whatever container shape the
 target `field` requires (a string, a list of strings, a table, a table of lists,
 …), validating the shape along the way. The bundled `regex` and `template`
-plugins call it so they only write the transform once. You are encouraged to
-reuse this helper or vendor it. </content>
+plugins call it so they only write the transform once. You are encouraged to do
+something similar.

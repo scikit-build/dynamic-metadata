@@ -139,6 +139,3 @@ one of them instead **replaces** the value (a transform pipeline — for example
 one plugin extracts a version and a later one normalizes it).
 
 [PEP 808]: https://peps.python.org/pep-0808/
-
-</content>
-</invoke>
