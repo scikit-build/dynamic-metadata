@@ -11,9 +11,9 @@ is still WiP and may change.
 The library is split into three audiences (see README.md):
 
 - **Users** configure plugins as an ordered array of tables,
-  `[[tool.dynamic-metadata]]`, each with a `provider` (a module, or a
-  `module:Class`) and optional `provider-path` (local dir). Entries run in
-  order.
+  `[[tool.dynamic-metadata]]`, each with a `provider`: either a registered
+  entry-point name (string) or an inline table `{path, module}` for a local
+  plugin. Entries run in order.
 - **Plugin authors** implement the hooks; they do _not_ need to depend on this
   package at runtime.
 - **Backend authors** consume `loader.py` to drive plugins; they also do not
@@ -45,14 +45,22 @@ warnings as errors and uses `--strict-markers --strict-config`.
 
 ### The plugin protocol
 
-A provider is either a module or a class (`provider = "module:Class"`); a class
-is instantiated with no args by `load_provider` and its hooks are bound methods
-(so they can share state via `self`). The one required hook is
-`dynamic_metadata(settings, project) -> dict[str, Any]`. It returns a fragment
-of the `[project]` table (`{field: value, ...}`), so one plugin may set several
-fields. Three optional hooks: `build_state(build_state) -> None` (called once
-before `dynamic_metadata` with the current build state — a provider that cares
-stashes it, typically on `self`; the loader detects it via
+A `provider` entry is one of two shapes, parsed by `_provider_location` and
+loaded by `load_provider(module, provider_path=None)`. A **string** is a name in
+the `dynamic_metadata.provider` entry-point group (bundled plugins register
+there — see `pyproject.toml`, names prefixed `dynamic_metadata.`; third-party
+plugins should prefix with their own package). An **inline table**
+`{path, module}` is a local import (loose in-project scripts) — there is no
+bare-import fallback. A duplicate name across distributions is a hard error. The
+loaded object is used per kind: module as-is, class instantiated with no args
+(hooks are bound methods sharing state via `self`), instance used directly.
+`list_providers()` enumerates names (also `dynamic-metadata providers`). The one
+required hook is `dynamic_metadata(settings, project) -> dict[str, Any]`. It
+returns a fragment of the `[project]` table (`{field: value, ...}`), so one
+plugin may set several fields. Three optional hooks:
+`build_state(build_state) -> None` (called once before `dynamic_metadata` with
+the current build state — a provider that cares stashes it, typically on `self`;
+the loader detects it via
 `isinstance(provider, DynamicMetadataBuildStateProtocol)`),
 `dynamic_wheel(settings) -> dict[str, bool]` (per-field METADATA 2.2 dynamic
 status; version must be false) and

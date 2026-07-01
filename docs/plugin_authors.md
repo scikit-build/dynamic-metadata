@@ -11,6 +11,26 @@ module exposing these hooks as functions, or a class (`"<module>:<Class>"`)
 exposing them as methods — a class is instantiated with no arguments, so its
 hooks share state through `self`.
 
+## Registering a name
+
+An installed plugin is referenced by a name it registers in the
+`dynamic_metadata.provider` entry-point group — the module-path form is only for
+a loose script inside the project being built, given as an
+[inline table](users.md#providing-a-custom-plugin). So a distributed plugin
+registers:
+
+```toml
+[project.entry-points."dynamic_metadata.provider"]
+"my_package.my_plugin" = "my_package.plugin"   # or "my_package.plugin:MyClass"
+```
+
+The value points at the module or class exposing the hooks. **Prefix the name
+with your package name** (here `my_package.`) — the group is shared across every
+installed plugin, and a name registered by two distributions is a hard error.
+The bundled plugins follow this convention (`dynamic_metadata.regex`, …). This
+is the only reason to touch your `pyproject.toml`; the hooks are unchanged, and
+you still do not depend on `dynamic-metadata` at runtime.
+
 ## The required hook
 
 ```python

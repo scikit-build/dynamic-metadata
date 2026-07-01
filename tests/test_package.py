@@ -1,14 +1,30 @@
 from __future__ import annotations
 
 import json
+from importlib.metadata import EntryPoint
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
 import dynamic_metadata.__main__
 import dynamic_metadata.loader
 import dynamic_metadata.plugins
+from dynamic_metadata._compat import metadata as compat_metadata
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+
+def _fake_group(*eps: EntryPoint) -> Callable[[str], list[EntryPoint]]:
+    """Stand in for the entry-point shim, serving ``eps`` for the provider group."""
+    group = dynamic_metadata.loader.PROVIDER_GROUP
+    return lambda name: list(eps) if name == group else []
+
+
+def _write_provider(plugin_dir: Path, name: str, body: str) -> None:
+    plugin_dir.mkdir(exist_ok=True)
+    (plugin_dir / f"{name}.py").write_text(body)
 
 
 def test_load_provider_path_loads_local(tmp_path: Path) -> None:
@@ -35,7 +51,7 @@ def test_load_provider_class_is_instantiated(tmp_path: Path) -> None:
 
     pyproject = dynamic_metadata.loader.process_dynamic_metadata(
         {"name": "test", "dynamic": ["version"]},
-        [{"provider": "class_prov:Provider", "provider-path": str(plugin_dir)}],
+        [{"provider": {"path": str(plugin_dir), "module": "class_prov:Provider"}}],
         "wheel",
     )
 
@@ -67,7 +83,7 @@ def test_template_basic() -> None:
         },
         [
             {
-                "provider": "dynamic_metadata.plugins.template",
+                "provider": "dynamic_metadata.template",
                 "field": "requires-python",
                 "result": ">={project[version]}",
             },
@@ -89,17 +105,17 @@ def test_template_order_reads_earlier_result() -> None:
         },
         [
             {
-                "provider": "dynamic_metadata.plugins.template",
+                "provider": "dynamic_metadata.template",
                 "field": "requires-python",
                 "result": ">={project[version]}",
             },
             {
-                "provider": "dynamic_metadata.plugins.template",
+                "provider": "dynamic_metadata.template",
                 "field": "license",
                 "result": "{project[requires-python]}",
             },
             {
-                "provider": "dynamic_metadata.plugins.template",
+                "provider": "dynamic_metadata.template",
                 "field": "readme",
                 "result": {"file": "{project[license]}"},
             },
@@ -121,12 +137,12 @@ def test_forward_reference_raises() -> None:
             {"name": "test", "dynamic": ["requires-python", "version"]},
             [
                 {
-                    "provider": "dynamic_metadata.plugins.template",
+                    "provider": "dynamic_metadata.template",
                     "field": "requires-python",
                     "result": ">={project[version]}",
                 },
                 {
-                    "provider": "dynamic_metadata.plugins.template",
+                    "provider": "dynamic_metadata.template",
                     "field": "version",
                     "result": "1.0",
                 },
@@ -141,12 +157,12 @@ def test_multiple_entries_same_field_merge_in_order() -> None:
         {"name": "test", "dynamic": ["dependencies"]},
         [
             {
-                "provider": "dynamic_metadata.plugins.template",
+                "provider": "dynamic_metadata.template",
                 "field": "dependencies",
                 "result": ["a"],
             },
             {
-                "provider": "dynamic_metadata.plugins.template",
+                "provider": "dynamic_metadata.template",
                 "field": "dependencies",
                 "result": ["b"],
             },
@@ -164,12 +180,12 @@ def test_scalar_field_second_entry_replaces() -> None:
         {"name": "test", "dynamic": ["version"]},
         [
             {
-                "provider": "dynamic_metadata.plugins.template",
+                "provider": "dynamic_metadata.template",
                 "field": "version",
                 "result": "1.0",
             },
             {
-                "provider": "dynamic_metadata.plugins.template",
+                "provider": "dynamic_metadata.template",
                 "field": "version",
                 "result": "{project[version]}.post1",
             },
@@ -191,7 +207,7 @@ def test_provider_sets_multiple_fields(tmp_path: Path) -> None:
 
     pyproject = dynamic_metadata.loader.process_dynamic_metadata(
         {"name": "test", "dynamic": ["version", "requires-python"]},
-        [{"provider": "multi_prov", "provider-path": str(plugin_dir)}],
+        [{"provider": {"path": str(plugin_dir), "module": "multi_prov"}}],
         "wheel",
     )
 
@@ -210,7 +226,7 @@ def test_unknown_field_rejected(tmp_path: Path) -> None:
     with pytest.raises(KeyError, match="settable"):
         dynamic_metadata.loader.process_dynamic_metadata(
             {"name": "test", "dynamic": ["version"]},
-            [{"provider": "bad_field_prov", "provider-path": str(plugin_dir)}],
+            [{"provider": {"path": str(plugin_dir), "module": "bad_field_prov"}}],
             "wheel",
         )
 
@@ -225,7 +241,7 @@ def test_field_not_declared_dynamic_rejected(tmp_path: Path) -> None:
     with pytest.raises(KeyError, match=r"project\.dynamic"):
         dynamic_metadata.loader.process_dynamic_metadata(
             {"name": "test", "dynamic": []},
-            [{"provider": "undeclared_prov", "provider-path": str(plugin_dir)}],
+            [{"provider": {"path": str(plugin_dir), "module": "undeclared_prov"}}],
             "wheel",
         )
 
@@ -238,12 +254,12 @@ def test_template_entry_points() -> None:
         },
         [
             {
-                "provider": "dynamic_metadata.plugins.template",
+                "provider": "dynamic_metadata.template",
                 "field": "version",
                 "result": "1.2.3",
             },
             {
-                "provider": "dynamic_metadata.plugins.template",
+                "provider": "dynamic_metadata.template",
                 "field": "entry-points",
                 "result": {
                     "my_group": {"my_point": "my_app:script_{project[version]}"}
@@ -267,7 +283,7 @@ def test_regex() -> None:
         },
         [
             {
-                "provider": "dynamic_metadata.plugins.regex",
+                "provider": "dynamic_metadata.regex",
                 "field": "requires-python",
                 "input": "pyproject.toml",
                 "regex": r"name = \"(?P<name>.+)\"",
@@ -286,7 +302,7 @@ def test_regex_rejects_unknown_setting() -> None:
             {"name": "test", "version": "0.1.0", "dynamic": ["requires-python"]},
             [
                 {
-                    "provider": "dynamic_metadata.plugins.regex",
+                    "provider": "dynamic_metadata.regex",
                     "field": "requires-python",
                     "input": "pyproject.toml",
                     "typo": "oops",
@@ -318,8 +334,10 @@ def test_build_state_hook_drives_result(tmp_path: Path) -> None:
             {"name": "test", "dynamic": ["version"]},
             [
                 {
-                    "provider": "build_state_prov:Provider",
-                    "provider-path": str(plugin_dir),
+                    "provider": {
+                        "path": str(plugin_dir),
+                        "module": "build_state_prov:Provider",
+                    },
                 },
             ],
             build_state,
@@ -362,8 +380,8 @@ def test_load_dynamic_metadata_aggregates_requires_and_wheel(
     )
 
     entries = [
-        {"provider": "full_prov:Provider", "provider-path": str(plugin_dir)},
-        {"provider": "bare_prov", "provider-path": str(plugin_dir)},
+        {"provider": {"path": str(plugin_dir), "module": "full_prov:Provider"}},
+        {"provider": {"path": str(plugin_dir), "module": "bare_prov"}},
     ]
 
     requires = []
@@ -397,7 +415,7 @@ def test_pep808_extends_static_dependencies() -> None:
         },
         [
             {
-                "provider": "dynamic_metadata.plugins.template",
+                "provider": "dynamic_metadata.template",
                 "field": "dependencies",
                 "result": ["numpy>={project[version]}"],
             },
@@ -421,7 +439,7 @@ def test_pep808_provider_reads_own_static() -> None:
         },
         [
             {
-                "provider": "dynamic_metadata.plugins.template",
+                "provider": "dynamic_metadata.template",
                 "field": "dependencies",
                 "result": ["saw:{project[dependencies]}"],
             },
@@ -536,7 +554,7 @@ def test_cli_show(
         'dynamic = ["requires-python"]\n'
         "\n"
         "[[tool.dynamic-metadata]]\n"
-        'provider = "dynamic_metadata.plugins.template"\n'
+        'provider = "dynamic_metadata.template"\n'
         'field = "requires-python"\n'
         'result = ">={project[version]}"\n'
     )
@@ -588,8 +606,8 @@ def test_cli_show_state(
         'dynamic = ["version"]\n'
         "\n"
         "[[tool.dynamic-metadata]]\n"
-        'provider = "state_prov:Provider"\n'
-        f"provider-path = {json.dumps(str(plugin_dir))}\n"
+        f"provider = {{ path = {json.dumps(str(plugin_dir))}, "
+        'module = "state_prov:Provider" }\n'
     )
 
     dynamic_metadata.__main__.main(
@@ -603,7 +621,7 @@ def test_cli_show_state(
 def test_readme_fragment_text_creates_readme() -> None:
     pyproject = dynamic_metadata.loader.process_dynamic_metadata(
         {"name": "test", "dynamic": ["readme"]},
-        [{"provider": "dynamic_metadata.plugins.readme_fragment", "text": "# Hello\n"}],
+        [{"provider": "dynamic_metadata.readme_fragment", "text": "# Hello\n"}],
         "wheel",
     )
 
@@ -616,10 +634,10 @@ def test_readme_fragment_appends_in_order() -> None:
         {"name": "test", "dynamic": ["readme"]},
         [
             {
-                "provider": "dynamic_metadata.plugins.readme_fragment",
+                "provider": "dynamic_metadata.readme_fragment",
                 "text": "# Title\n\n",
             },
-            {"provider": "dynamic_metadata.plugins.readme_fragment", "text": "Body.\n"},
+            {"provider": "dynamic_metadata.readme_fragment", "text": "Body.\n"},
         ],
         "wheel",
     )
@@ -636,11 +654,11 @@ def test_readme_fragment_content_type_carried() -> None:
         {"name": "test", "dynamic": ["readme"]},
         [
             {
-                "provider": "dynamic_metadata.plugins.readme_fragment",
+                "provider": "dynamic_metadata.readme_fragment",
                 "content-type": "text/x-rst",
                 "text": "Title\n",
             },
-            {"provider": "dynamic_metadata.plugins.readme_fragment", "text": "more\n"},
+            {"provider": "dynamic_metadata.readme_fragment", "text": "more\n"},
         ],
         "wheel",
     )
@@ -659,7 +677,7 @@ def test_readme_fragment_file_start_after_end_before(tmp_path: Path) -> None:
         {"name": "test", "dynamic": ["readme"]},
         [
             {
-                "provider": "dynamic_metadata.plugins.readme_fragment",
+                "provider": "dynamic_metadata.readme_fragment",
                 "path": str(src),
                 "start-after": "<!-- start -->\n",
                 "end-before": "<!-- end -->",
@@ -679,7 +697,7 @@ def test_readme_fragment_file_start_at_end_at(tmp_path: Path) -> None:
         {"name": "test", "dynamic": ["readme"]},
         [
             {
-                "provider": "dynamic_metadata.plugins.readme_fragment",
+                "provider": "dynamic_metadata.readme_fragment",
                 "path": str(src),
                 "start-at": "## Heading",
                 "end-at": "END",
@@ -699,7 +717,7 @@ def test_readme_fragment_file_pattern(tmp_path: Path) -> None:
         {"name": "test", "dynamic": ["readme"]},
         [
             {
-                "provider": "dynamic_metadata.plugins.readme_fragment",
+                "provider": "dynamic_metadata.readme_fragment",
                 "path": str(src),
                 "pattern": r"(## 1\.0.*?)(?=\n## )",
             }
@@ -716,7 +734,7 @@ def test_readme_fragment_rejects_text_and_path() -> None:
             {"name": "test", "dynamic": ["readme"]},
             [
                 {
-                    "provider": "dynamic_metadata.plugins.readme_fragment",
+                    "provider": "dynamic_metadata.readme_fragment",
                     "text": "x",
                     "path": "y",
                 }
@@ -729,7 +747,7 @@ def test_readme_fragment_rejects_neither() -> None:
     with pytest.raises(RuntimeError, match="must set 'text' or 'path'"):
         dynamic_metadata.loader.process_dynamic_metadata(
             {"name": "test", "dynamic": ["readme"]},
-            [{"provider": "dynamic_metadata.plugins.readme_fragment"}],
+            [{"provider": "dynamic_metadata.readme_fragment"}],
             "wheel",
         )
 
@@ -740,7 +758,7 @@ def test_readme_fragment_rejects_slicing_without_path() -> None:
             {"name": "test", "dynamic": ["readme"]},
             [
                 {
-                    "provider": "dynamic_metadata.plugins.readme_fragment",
+                    "provider": "dynamic_metadata.readme_fragment",
                     "text": "x",
                     "start-after": "y",
                 }
@@ -757,7 +775,7 @@ def test_readme_fragment_rejects_both_starts(tmp_path: Path) -> None:
             {"name": "test", "dynamic": ["readme"]},
             [
                 {
-                    "provider": "dynamic_metadata.plugins.readme_fragment",
+                    "provider": "dynamic_metadata.readme_fragment",
                     "path": str(src),
                     "start-after": "a",
                     "start-at": "b",
@@ -775,7 +793,7 @@ def test_readme_fragment_missing_marker(tmp_path: Path) -> None:
             {"name": "test", "dynamic": ["readme"]},
             [
                 {
-                    "provider": "dynamic_metadata.plugins.readme_fragment",
+                    "provider": "dynamic_metadata.readme_fragment",
                     "path": str(src),
                     "start-after": "absent",
                 }
@@ -790,7 +808,7 @@ def test_readme_fragment_rejects_unknown_setting() -> None:
             {"name": "test", "dynamic": ["readme"]},
             [
                 {
-                    "provider": "dynamic_metadata.plugins.readme_fragment",
+                    "provider": "dynamic_metadata.readme_fragment",
                     "text": "x",
                     "typo": "oops",
                 }
@@ -804,11 +822,11 @@ def test_substitute_readme() -> None:
         {"name": "test", "dynamic": ["readme"]},
         [
             {
-                "provider": "dynamic_metadata.plugins.readme_fragment",
+                "provider": "dynamic_metadata.readme_fragment",
                 "text": "see #42 now\n",
             },
             {
-                "provider": "dynamic_metadata.plugins.substitute",
+                "provider": "dynamic_metadata.substitute",
                 "field": "readme",
                 "pattern": r"#(\d+)",
                 "replacement": r"[#\1](https://x/\1)",
@@ -826,12 +844,12 @@ def test_substitute_str_field() -> None:
         {"name": "test", "version": "0.1.0", "dynamic": ["description"]},
         [
             {
-                "provider": "dynamic_metadata.plugins.template",
+                "provider": "dynamic_metadata.template",
                 "field": "description",
                 "result": "Version {project[version]}",
             },
             {
-                "provider": "dynamic_metadata.plugins.substitute",
+                "provider": "dynamic_metadata.substitute",
                 "field": "description",
                 "pattern": "Version",
                 "replacement": "v",
@@ -849,12 +867,12 @@ def test_substitute_format_references_field() -> None:
         {"name": "test", "version": "1.2.3", "dynamic": ["description"]},
         [
             {
-                "provider": "dynamic_metadata.plugins.template",
+                "provider": "dynamic_metadata.template",
                 "field": "description",
                 "result": "placeholder",
             },
             {
-                "provider": "dynamic_metadata.plugins.substitute",
+                "provider": "dynamic_metadata.substitute",
                 "field": "description",
                 "pattern": "placeholder",
                 "replacement": "v{project[version]}",
@@ -874,12 +892,12 @@ def test_substitute_format_with_backreference() -> None:
         {"name": "test", "version": "1.2.3", "dynamic": ["description"]},
         [
             {
-                "provider": "dynamic_metadata.plugins.template",
+                "provider": "dynamic_metadata.template",
                 "field": "description",
                 "result": "#42",
             },
             {
-                "provider": "dynamic_metadata.plugins.substitute",
+                "provider": "dynamic_metadata.substitute",
                 "field": "description",
                 "pattern": r"#(\d+)",
                 "replacement": r"{project[version]}-\1",
@@ -899,12 +917,12 @@ def test_substitute_no_format_keeps_braces_literal() -> None:
         {"name": "test", "dynamic": ["description"]},
         [
             {
-                "provider": "dynamic_metadata.plugins.template",
+                "provider": "dynamic_metadata.template",
                 "field": "description",
                 "result": "placeholder",
             },
             {
-                "provider": "dynamic_metadata.plugins.substitute",
+                "provider": "dynamic_metadata.substitute",
                 "field": "description",
                 "pattern": "placeholder",
                 "replacement": "x{y}z",
@@ -922,12 +940,12 @@ def test_substitute_format_rejects_non_bool() -> None:
             {"name": "test", "dynamic": ["description"]},
             [
                 {
-                    "provider": "dynamic_metadata.plugins.template",
+                    "provider": "dynamic_metadata.template",
                     "field": "description",
                     "result": "placeholder",
                 },
                 {
-                    "provider": "dynamic_metadata.plugins.substitute",
+                    "provider": "dynamic_metadata.substitute",
                     "field": "description",
                     "pattern": "placeholder",
                     "replacement": "x",
@@ -943,11 +961,11 @@ def test_substitute_ignore_case() -> None:
         {"name": "test", "dynamic": ["readme"]},
         [
             {
-                "provider": "dynamic_metadata.plugins.readme_fragment",
+                "provider": "dynamic_metadata.readme_fragment",
                 "text": "Hello HELLO\n",
             },
             {
-                "provider": "dynamic_metadata.plugins.substitute",
+                "provider": "dynamic_metadata.substitute",
                 "field": "readme",
                 "pattern": "hello",
                 "replacement": "hi",
@@ -966,7 +984,7 @@ def test_substitute_rejects_non_scalar() -> None:
             {"name": "test", "dynamic": ["keywords"]},
             [
                 {
-                    "provider": "dynamic_metadata.plugins.substitute",
+                    "provider": "dynamic_metadata.substitute",
                     "field": "keywords",
                     "pattern": "a",
                     "replacement": "b",
@@ -982,7 +1000,7 @@ def test_substitute_requires_existing_value() -> None:
             {"name": "test", "dynamic": ["readme"]},
             [
                 {
-                    "provider": "dynamic_metadata.plugins.substitute",
+                    "provider": "dynamic_metadata.substitute",
                     "field": "readme",
                     "pattern": "a",
                     "replacement": "b",
@@ -998,11 +1016,11 @@ def test_substitute_rejects_unknown_setting() -> None:
             {"name": "test", "dynamic": ["readme"]},
             [
                 {
-                    "provider": "dynamic_metadata.plugins.readme_fragment",
+                    "provider": "dynamic_metadata.readme_fragment",
                     "text": "hi\n",
                 },
                 {
-                    "provider": "dynamic_metadata.plugins.substitute",
+                    "provider": "dynamic_metadata.substitute",
                     "field": "readme",
                     "pattern": "a",
                     "replacement": "b",
@@ -1018,7 +1036,7 @@ def test_static_sets_fields() -> None:
         {"name": "test", "dynamic": ["version", "description", "keywords"]},
         [
             {
-                "provider": "dynamic_metadata.plugins.static",
+                "provider": "dynamic_metadata.static",
                 "version": "1.2.3",
                 "description": "My package",
                 "keywords": ["a", "b"],
@@ -1039,11 +1057,11 @@ def test_static_then_substitute() -> None:
         {"name": "test", "dynamic": ["version"]},
         [
             {
-                "provider": "dynamic_metadata.plugins.static",
+                "provider": "dynamic_metadata.static",
                 "version": "1.2.3-beta",
             },
             {
-                "provider": "dynamic_metadata.plugins.substitute",
+                "provider": "dynamic_metadata.substitute",
                 "field": "version",
                 "pattern": "-beta$",
                 "replacement": "b0",
@@ -1061,7 +1079,7 @@ def test_static_rejects_unknown_field() -> None:
             {"name": "test", "dynamic": ["version"]},
             [
                 {
-                    "provider": "dynamic_metadata.plugins.static",
+                    "provider": "dynamic_metadata.static",
                     "descriptions": "typo",
                 }
             ],
@@ -1075,9 +1093,251 @@ def test_static_field_must_be_dynamic() -> None:
             {"name": "test", "dynamic": []},
             [
                 {
-                    "provider": "dynamic_metadata.plugins.static",
+                    "provider": "dynamic_metadata.static",
                     "version": "1.2.3",
                 }
             ],
             "wheel",
         )
+
+
+def test_regex_short_name() -> None:
+    # The bundled plugins are registered under dynamic_metadata-prefixed names,
+    # so the registered name resolves via the entry-point group to the module.
+    pyproject = dynamic_metadata.loader.process_dynamic_metadata(
+        {"name": "test", "version": "0.1.0", "dynamic": ["requires-python"]},
+        [
+            {
+                "provider": "dynamic_metadata.regex",
+                "field": "requires-python",
+                "input": "pyproject.toml",
+                "regex": r"name = \"(?P<name>.+)\"",
+                "result": ">={name}",
+            },
+        ],
+        "wheel",
+    )
+
+    assert pyproject["requires-python"] == ">=dynamic-metadata"
+
+
+def test_entry_point_module(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _write_provider(
+        tmp_path,
+        "ep_mod",
+        "def dynamic_metadata(settings, project):\n    return {'version': '1.0'}\n",
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.setattr(
+        compat_metadata,
+        "entry_points",
+        _fake_group(
+            EntryPoint("mymod", "ep_mod", dynamic_metadata.loader.PROVIDER_GROUP)
+        ),
+    )
+
+    provider = dynamic_metadata.loader.load_provider("mymod")
+    assert provider.dynamic_metadata({}, {}) == {"version": "1.0"}
+
+
+def test_entry_point_class_is_instantiated(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _write_provider(
+        tmp_path,
+        "ep_cls",
+        "class Provider:\n"
+        "    def dynamic_metadata(self, settings, project):\n"
+        "        return {'version': '2.0'}\n",
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.setattr(
+        compat_metadata,
+        "entry_points",
+        _fake_group(
+            EntryPoint("cls", "ep_cls:Provider", dynamic_metadata.loader.PROVIDER_GROUP)
+        ),
+    )
+
+    import ep_cls  # type: ignore[import-not-found]  # noqa: PLC0415
+
+    provider = dynamic_metadata.loader.load_provider("cls")
+    assert isinstance(provider, ep_cls.Provider)
+
+
+def test_entry_point_instance_not_called(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # An entry point may point at an already-instantiated object; it is used as
+    # is rather than called (a class would be instantiated).
+    _write_provider(
+        tmp_path,
+        "ep_inst",
+        "class Provider:\n"
+        "    def dynamic_metadata(self, settings, project):\n"
+        "        return {'version': '3.0'}\n"
+        "INSTANCE = Provider()\n",
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.setattr(
+        compat_metadata,
+        "entry_points",
+        _fake_group(
+            EntryPoint(
+                "inst", "ep_inst:INSTANCE", dynamic_metadata.loader.PROVIDER_GROUP
+            )
+        ),
+    )
+
+    import ep_inst  # type: ignore[import-not-found]  # noqa: PLC0415
+
+    provider = dynamic_metadata.loader.load_provider("inst")
+    assert provider is ep_inst.INSTANCE
+
+
+def test_entry_point_used_not_raw_import(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Without provider-path, a name is resolved through the entry-point group
+    # only; a same-named importable module is never imported directly.
+    _write_provider(
+        tmp_path,
+        "winning",
+        "def dynamic_metadata(settings, project):\n    return {'version': 'ep'}\n",
+    )
+    _write_provider(
+        tmp_path,
+        "collide",
+        "def dynamic_metadata(settings, project):\n    return {'version': 'module'}\n",
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.setattr(
+        compat_metadata,
+        "entry_points",
+        _fake_group(
+            EntryPoint("collide", "winning", dynamic_metadata.loader.PROVIDER_GROUP)
+        ),
+    )
+
+    provider = dynamic_metadata.loader.load_provider("collide")
+    assert provider.dynamic_metadata({}, {}) == {"version": "ep"}
+
+
+def test_raw_import_rejected_without_provider_path() -> None:
+    # The module-path form requires the inline table: an importable module that
+    # is not a registered entry point is not accepted as a bare string.
+    with pytest.raises(ModuleNotFoundError, match="Unknown provider"):
+        dynamic_metadata.loader.load_provider("dynamic_metadata.plugins.regex")
+
+
+def test_provider_inline_table_local(tmp_path: Path) -> None:
+    # The inline table {path, module} imports a local plugin from a directory.
+    _write_provider(
+        tmp_path,
+        "inline_prov",
+        "def dynamic_metadata(settings, project):\n    return {'version': '9.9'}\n",
+    )
+
+    pyproject = dynamic_metadata.loader.process_dynamic_metadata(
+        {"name": "test", "dynamic": ["version"]},
+        [{"provider": {"path": str(tmp_path), "module": "inline_prov"}}],
+        "wheel",
+    )
+
+    assert pyproject["version"] == "9.9"
+
+
+@pytest.mark.parametrize(
+    "spec",
+    [
+        pytest.param({"module": "x"}, id="missing-path"),
+        pytest.param({"path": "x"}, id="missing-module"),
+        pytest.param({"path": "x", "module": "y", "extra": "z"}, id="extra-key"),
+        pytest.param(42, id="wrong-type"),
+    ],
+)
+def test_provider_inline_table_rejects_bad_shape(spec: Any) -> None:
+    with pytest.raises(ValueError, match="inline table with exactly"):
+        list(dynamic_metadata.loader.load_dynamic_metadata([{"provider": spec}]))
+
+
+def test_entry_point_duplicate_name_raises(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    group = dynamic_metadata.loader.PROVIDER_GROUP
+    monkeypatch.setattr(
+        compat_metadata,
+        "entry_points",
+        _fake_group(
+            EntryPoint("dup", "a.mod", group),
+            EntryPoint("dup", "b.mod", group),
+        ),
+    )
+
+    with pytest.raises(ValueError, match="multiple distributions"):
+        dynamic_metadata.loader.load_provider("dup")
+
+
+def test_entry_point_load_failure_wrapped(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    group = dynamic_metadata.loader.PROVIDER_GROUP
+    monkeypatch.setattr(
+        compat_metadata,
+        "entry_points",
+        _fake_group(EntryPoint("broken", "no_such_module_xyz", group)),
+    )
+
+    with pytest.raises(ImportError, match="Could not load provider 'broken'"):
+        dynamic_metadata.loader.load_provider("broken")
+
+
+def test_provider_path_ignores_entry_point(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # provider-path forces a raw import; a registered entry point of the same
+    # name is not consulted.
+    _write_provider(
+        tmp_path,
+        "local",
+        "def dynamic_metadata(settings, project):\n    return {'version': 'local'}\n",
+    )
+    monkeypatch.setattr(
+        compat_metadata,
+        "entry_points",
+        _fake_group(
+            EntryPoint(
+                "local",
+                "dynamic_metadata.plugins.static",
+                dynamic_metadata.loader.PROVIDER_GROUP,
+            )
+        ),
+    )
+
+    provider = dynamic_metadata.loader.load_provider("local", str(tmp_path))
+    assert provider.dynamic_metadata({}, {}) == {"version": "local"}
+
+
+def test_unknown_provider_suggests(monkeypatch: pytest.MonkeyPatch) -> None:
+    group = dynamic_metadata.loader.PROVIDER_GROUP
+    monkeypatch.setattr(
+        compat_metadata,
+        "entry_points",
+        _fake_group(EntryPoint("regex", "dynamic_metadata.plugins.regex", group)),
+    )
+
+    with pytest.raises(ModuleNotFoundError, match="did you mean 'regex'"):
+        dynamic_metadata.loader.load_provider("regx")
+
+
+def test_list_providers_includes_bundled() -> None:
+    providers = dynamic_metadata.loader.list_providers()
+    assert "dynamic_metadata.regex" in providers
+    assert "dynamic_metadata.plugins.regex" in providers["dynamic_metadata.regex"]
+
+
+def test_cli_providers(capsys: pytest.CaptureFixture[str]) -> None:
+    dynamic_metadata.__main__.main(["providers"])
+    out = capsys.readouterr().out
+    assert "dynamic_metadata.regex" in out
+    assert "dynamic_metadata.template" in out

@@ -32,7 +32,7 @@ build-backend = "..."
 dynamic = ["description", "version"]
 
 [[tool.dynamic-metadata]]
-provider = "dynamic_metadata.plugins.regex"
+provider = "dynamic_metadata.regex"
 field = "version"
 input = "src/my_package/__init__.py"
 ```
@@ -43,7 +43,7 @@ produced above:
 
 ```toml
 [[tool.dynamic-metadata]]
-provider = "dynamic_metadata.plugins.template"
+provider = "dynamic_metadata.template"
 field = "description"
 result = "This is {project[name]}, version {project[version]}"
 ```

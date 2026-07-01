@@ -50,6 +50,13 @@ Changelog = "https://github.com/scikit-build/dynamic-metadata/releases"
 [project.entry-points."validate_pyproject.tool_schema"]
 dynamic-metadata = "dynamic_metadata.schema:get_schema"
 
+[project.entry-points."dynamic_metadata.provider"]
+"dynamic_metadata.regex" = "dynamic_metadata.plugins.regex"
+"dynamic_metadata.template" = "dynamic_metadata.plugins.template"
+"dynamic_metadata.substitute" = "dynamic_metadata.plugins.substitute"
+"dynamic_metadata.static" = "dynamic_metadata.plugins.static"
+"dynamic_metadata.readme_fragment" = "dynamic_metadata.plugins.readme_fragment"
+
 [tool.flit.sdist]
 include = ["tests/**/*.py", "docs/"]
 exclude = ["**/*.egg-info", "docs/_build"]

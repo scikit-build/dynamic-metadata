@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import difflib
 import importlib
 import importlib.abc
 import importlib.machinery
+import inspect
 import sys
+from collections.abc import Mapping
 from pathlib import Path
 from types import MappingProxyType
 from typing import (
@@ -12,10 +15,12 @@ from typing import (
     Literal,
     Protocol,
     Union,
+    cast,
     get_args,
     runtime_checkable,
 )
 
+from ._compat import metadata
 from .info import (
     ALL_FIELDS,
     DICT_STR_FIELDS,
@@ -31,13 +36,15 @@ BuildState = Literal[
 BUILD_STATES: frozenset[str] = frozenset(get_args(BuildState))
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Mapping, Sequence
+    from collections.abc import Generator, Sequence
     from importlib.machinery import ModuleSpec
+    from importlib.metadata import EntryPoint
     from types import ModuleType
 
 
 __all__ = [
     "BuildState",
+    "list_providers",
     "load_dynamic_metadata",
     "load_provider",
     "process_dynamic_metadata",
@@ -81,9 +88,13 @@ DMProtocols = Union[
     DynamicMetadataWheelProtocol,
 ]
 
-# Per-entry keys consumed by the loader itself; everything else is plugin
-# settings, passed through verbatim to the provider.
-RESERVED_KEYS = frozenset(["provider", "provider-path"])
+# The only per-entry key consumed by the loader itself; everything else is
+# plugin settings, passed through verbatim to the provider.
+RESERVED_KEYS = frozenset(["provider"])
+
+# Entry-point group a plugin distribution registers a named provider under. The
+# bundled plugins register here too (see pyproject.toml).
+PROVIDER_GROUP = "dynamic_metadata.provider"
 
 
 class _ProviderPathFinder(importlib.abc.MetaPathFinder):
@@ -168,18 +179,21 @@ def _merge_metadata(field: str, static: Any, dynamic: Any) -> Any:
     return merged_groups
 
 
-def load_provider(
-    provider: str,
-    provider_path: str | None = None,
-) -> DMProtocols:
-    """Load a provider, returning the object whose hooks are called.
+def _instantiate(obj: Any) -> DMProtocols:
+    """Turn a loaded object into the provider whose hooks are called.
 
-    ``provider`` is either a module path (``"pkg.mod"``) or a module path and a
-    class within it (``"pkg.mod:Class"``). A bare module is returned as-is, so
-    its hooks are plain module-level functions; a class is instantiated with no
-    arguments and the instance is returned, so its hooks are bound methods and
+    A class is instantiated with no arguments so its hooks are bound methods and
     may share state through ``self`` (e.g. the optional ``build_state`` hook
-    stashing the build state for ``dynamic_metadata`` to read).
+    stashing the build state for ``dynamic_metadata`` to read). A module or an
+    already-instantiated object is used as-is.
+    """
+    return cast("DMProtocols", obj() if inspect.isclass(obj) else obj)
+
+
+def _import_provider(provider: str, provider_path: str | None = None) -> Any:
+    """Import ``provider`` (``"pkg.mod"`` or ``"pkg.mod:Class"``) as an object.
+
+    Returns the module, or the named attribute within it, without instantiating.
     """
     module_name, _, class_name = provider.partition(":")
 
@@ -196,7 +210,105 @@ def load_provider(
         finally:
             sys.meta_path.remove(finder)
 
-    return getattr(module, class_name)() if class_name else module
+    return getattr(module, class_name) if class_name else module
+
+
+def _entry_point_dist(ep: EntryPoint) -> str | None:
+    """Best-effort distribution name for an entry point (for messages)."""
+    dist = getattr(ep, "dist", None)
+    return getattr(dist, "name", None) if dist is not None else None
+
+
+def _load_entry_point(name: str) -> Any:
+    """Load a provider registered under ``name`` in ``PROVIDER_GROUP``.
+
+    Returns the loaded object, or ``None`` if no entry point matches (so the
+    caller can fall back to importing ``name`` as a module). Raises if more than
+    one distribution registers the name (a non-deterministic collision) or the
+    entry point cannot be loaded.
+    """
+    eps = [ep for ep in metadata.entry_points(PROVIDER_GROUP) if ep.name == name]
+    if not eps:
+        return None
+    if len(eps) > 1:
+        dists = ", ".join(sorted(_entry_point_dist(ep) or ep.value for ep in eps))
+        msg = (
+            f"Provider name {name!r} is registered by multiple distributions "
+            f"({dists}); use an explicit 'module' or 'module:Class' provider"
+        )
+        raise ValueError(msg)
+    ep = eps[0]
+    try:
+        return ep.load()
+    except (ImportError, AttributeError) as exc:
+        msg = f"Could not load provider {name!r} ({ep.value!r}): {exc}"
+        raise ImportError(msg) from exc
+
+
+def load_provider(
+    provider: str,
+    provider_path: str | None = None,
+) -> DMProtocols:
+    """Load a provider, returning the object whose hooks are called.
+
+    ``provider`` is resolved in one of two ways:
+
+    * With ``provider_path`` (required for the module-path form), it is imported
+      from that directory as a module path (``"pkg.mod"`` or ``"pkg.mod:Class"``);
+      entry points are not consulted. This is for a plugin living inside the
+      project being built, not installed as a distribution.
+    * Otherwise it is a name registered in the ``PROVIDER_GROUP`` entry-point
+      group. An installed plugin is only reachable this way — a raw import path
+      without ``provider-path`` is not accepted.
+
+    A bare module is returned as-is (hooks are module-level functions); a class
+    is instantiated with no arguments; an already-instantiated object is used
+    directly.
+    """
+    if provider_path is not None:
+        return _instantiate(_import_provider(provider, provider_path))
+
+    loaded = _load_entry_point(provider)
+    if loaded is None:
+        known = sorted(list_providers())
+        matches = difflib.get_close_matches(provider, known)
+        hint = f"; did you mean {matches[0]!r}?" if matches else ""
+        available = ", ".join(known) or "none"
+        msg = f"Unknown provider {provider!r}{hint} (available: {available})"
+        raise ModuleNotFoundError(msg)
+    return _instantiate(loaded)
+
+
+def list_providers() -> dict[str, str]:
+    """Map each registered provider name to a human-readable descriptor.
+
+    Discovers every entry point in ``PROVIDER_GROUP`` (the bundled plugins plus
+    any installed third-party plugins). The descriptor is the entry-point value,
+    annotated with the providing distribution when available.
+    """
+    providers: dict[str, str] = {}
+    for ep in metadata.entry_points(PROVIDER_GROUP):
+        dist = _entry_point_dist(ep)
+        providers[ep.name] = f"{ep.value} ({dist})" if dist else ep.value
+    return providers
+
+
+def _provider_location(spec: Any) -> tuple[str, str | None]:
+    """Resolve a ``provider`` value into ``(module, provider_path)``.
+
+    A string is a registered entry-point name (no path). An inline table names a
+    local plugin to import from a directory, with exactly ``path`` (the
+    directory) and ``module`` (``"pkg.mod"`` or ``"pkg.mod:Class"``) keys.
+    """
+    if isinstance(spec, str):
+        return spec, None
+    if not isinstance(spec, Mapping) or set(spec) != {"path", "module"}:
+        msg = (
+            "'provider' must be a registered name (string) or an inline table "
+            "with exactly 'path' and 'module' keys"
+        )
+        raise ValueError(msg)
+    return spec["module"], spec["path"]
 
 
 def load_dynamic_metadata(
@@ -204,15 +316,15 @@ def load_dynamic_metadata(
 ) -> Generator[tuple[DMProtocols, dict[str, Any]], None, None]:
     """Load each entry's provider, yielding it with its plugin settings.
 
-    Entries are processed in order; ``provider`` and ``provider-path`` are
-    consumed here and the remaining keys are returned as plugin settings.
+    Entries are processed in order; ``provider`` is consumed here and the
+    remaining keys are returned as plugin settings.
     """
     for entry in entries:
         if "provider" not in entry:
             msg = "Each [[tool.dynamic-metadata]] entry must set a 'provider'"
             raise KeyError(msg)
         settings = {k: v for k, v in entry.items() if k not in RESERVED_KEYS}
-        provider = load_provider(entry["provider"], entry.get("provider-path"))
+        provider = load_provider(*_provider_location(entry["provider"]))
         yield provider, settings
 
 

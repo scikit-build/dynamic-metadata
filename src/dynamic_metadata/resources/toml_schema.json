@@ -10,8 +10,24 @@
       "required": ["provider"],
       "additionalProperties": true,
       "properties": {
-        "provider": { "type": "string" },
-        "provider-path": { "type": "string" }
+        "provider": {
+          "oneOf": [
+            {
+              "type": "string",
+              "description": "A registered provider entry-point name."
+            },
+            {
+              "type": "object",
+              "description": "A local plugin imported from a directory.",
+              "required": ["path", "module"],
+              "additionalProperties": false,
+              "properties": {
+                "path": { "type": "string" },
+                "module": { "type": "string" }
+              }
+            }
+          ]
+        }
       }
     }
   }

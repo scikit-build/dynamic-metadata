@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 from ._compat import tomllib
-from .loader import BUILD_STATES, process_dynamic_metadata
+from .loader import BUILD_STATES, list_providers, process_dynamic_metadata
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -34,9 +34,28 @@ def main_show(args: argparse.Namespace, /) -> None:
     print(json.dumps(project, indent=2))
 
 
+def main_providers(_args: argparse.Namespace, /) -> None:
+    """Print the registered provider names and where each resolves to."""
+    providers = list_providers()
+    if not providers:
+        print("No providers registered.")
+        return
+    width = max(len(name) for name in providers)
+    for name in sorted(providers):
+        print(f"{name:<{width}}  {providers[name]}")
+
+
 def populate_parser(parser: argparse.ArgumentParser, /) -> None:
     """Add the ``dynamic-metadata`` subcommands to an existing parser."""
     subparsers = parser.add_subparsers(required=True, help="Commands")
+    providers = subparsers.add_parser(
+        "providers",
+        help="List the registered dynamic-metadata providers",
+        description="Lists every provider registered in the "
+        "'dynamic_metadata.provider' entry-point group (the bundled plugins "
+        "plus any installed third-party plugins) and where each resolves to.",
+    )
+    providers.set_defaults(func=main_providers)
     show = subparsers.add_parser(
         "show",
         help="Show the project table with dynamic metadata resolved",
