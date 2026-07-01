@@ -24,4 +24,6 @@ else:
 
     def entry_points(group: str) -> list[importlib.metadata.EntryPoint]:
         """Return the entry points in ``group`` across installed distributions."""
-        return list(importlib.metadata.entry_points().get(group, []))
+        # Pre-3.10 entry_points() returns a dict; pylint checks the 3.10+ stub.
+        eps = importlib.metadata.entry_points()
+        return list(eps.get(group, []))  # pylint: disable=no-member
