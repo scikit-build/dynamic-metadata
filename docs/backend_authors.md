@@ -39,9 +39,8 @@ current directory.
 ## Reading the configuration
 
 Parse `pyproject.toml` and take `tool.dynamic-metadata` as an **ordered list of
-tables**. Each table has a required `provider` and an optional `provider-path`;
-every other key is plugin-specific and passed through verbatim as that plugin's
-`settings`.
+tables**. Each table has a required `provider`; every other key is
+plugin-specific and passed through verbatim as that plugin's `settings`.
 
 ```python
 import tomllib  # or tomli on <3.11
@@ -58,24 +57,45 @@ enforces this for you.
 
 ## Loading a provider
 
-A `provider` is either a module (`"pkg.mod"`) or a `module:Class`
-(`"pkg.mod:Class"`). A bare module is used as-is, so its hooks are module-level
-functions; a class is instantiated with no arguments, so its hooks are bound
-methods and can share state through `self`.
+A `provider` takes one of two shapes. A **string** is a name registered in the
+`dynamic_metadata.provider` entry-point group. An **inline table**
+`{ path, module }` names a local plugin: `module` (`"pkg.mod"` or
+`"pkg.mod:Class"`) is imported from the `path` directory. The module-path form
+is _only_ available via the table — an installed plugin is reachable through its
+entry point, not a bare import string.
+
+The loaded object is used according to its kind: a module is used as-is (hooks
+are module-level functions); a class is instantiated with no arguments (hooks
+are bound methods and can share state through `self`); an already-instantiated
+object (a `module:instance` entry point) is used directly.
 
 ```python
-import importlib
+from dynamic_metadata._compat.metadata import entry_points
 
 
-def load_provider(provider, provider_path=None):
-    module_name, _, class_name = provider.partition(":")
-    # provider_path handling omitted; see below
-    module = importlib.import_module(module_name)
-    return getattr(module, class_name)() if class_name else module
+def load_provider(spec):
+    if not isinstance(spec, str):  # inline table {path, module}
+        return import_from_path(spec["module"], spec["path"])  # see below
+    matches = [
+        ep for ep in entry_points("dynamic_metadata.provider") if ep.name == spec
+    ]
+    if not matches:
+        raise ModuleNotFoundError(f"Unknown provider {spec!r}")
+    obj = matches[0].load()  # >1 match is a collision → hard error
+    return obj() if isinstance(obj, type) else obj
 ```
 
-`provider-path` lets a plugin live inside the project being built (a local
-directory not installed as a package). The reference loader installs a
+Names are conventionally prefixed with the providing package (the bundled
+plugins are `dynamic_metadata.regex`, …); a name registered by more than one
+distribution is a hard error rather than a non-deterministic pick. This
+resolution is entirely internal to the loader; the backend-facing signatures of
+`process_dynamic_metadata` and `load_dynamic_metadata` are unchanged.
+`list_providers()` returns the registered names (useful for diagnostics); it
+lives in `discovery.py` rather than `loader.py`, since a backend does not need
+it to resolve metadata. The `dynamic-metadata providers` CLI prints them.
+
+The inline-table `path` lets a plugin live inside the project being built (a
+local directory not installed as a package). The reference loader installs a
 `sys.meta_path` finder scoped to that directory for the single import —
 mirroring how `pyproject_hooks` handles PEP 517's `backend-path` — so the
 in-tree provider wins over any same-named installed module and a missing
@@ -118,8 +138,7 @@ def collect_requires(entries):
 ```
 
 `load_dynamic_metadata` is a thin generator that loads each entry's provider and
-hands back the leftover keys as `settings` (it strips `provider` /
-`provider-path`).
+hands back the leftover keys as `settings` (it consumes only `provider`).
 
 ## Resolving the metadata
 

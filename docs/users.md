@@ -2,25 +2,29 @@
 
 Plugins are configured as an **ordered array of tables**,
 `[[tool.dynamic-metadata]]`. Each entry must specify a `provider` exposing the
-plugin API; everything else in the entry is passed to that plugin as settings. A
-`provider` is either a module (`"<module>"`) or a class within a module
-(`"<module>:<Class>"`); a class is instantiated and its hooks are called as
-methods.
+plugin API; everything else in the entry is passed to that plugin as settings.
+
+An installed plugin is referenced by the **name** it registers in the
+`dynamic_metadata.provider` entry-point group. Names are conventionally prefixed
+with the providing package, so the bundled plugins are `dynamic_metadata.regex`,
+`dynamic_metadata.template`, and so on:
 
 ```toml
 [[tool.dynamic-metadata]]
-provider = "<module>"        # or "<module>:<Class>"
+provider = "dynamic_metadata.regex"
 # ... plugin settings ...
 ```
+
+Run `dynamic-metadata providers` to see the names available in your environment.
+A plugin that lives inside your own project rather than an installed
+distribution is instead given as an [inline table](#providing-a-custom-plugin)
+with `path` and `module` keys.
 
 Entries run **in order**, so a later entry sees every field an earlier entry
 produced. This makes resolution order explicit (no dependency graph), lets you
 modify one field with several plugins, and means a plugin can read another
-field's value simply with `project[...]`.
-
-There is an optional key, `provider-path`, which specifies a local directory to
-load the plugin from, allowing plugins to live inside your own project. Plugins
-can, if desired, use their own `tool.*` sections as well.
+field's value simply with `project[...]`. Plugins can, if desired, use their own
+`tool.*` sections as well.
 
 Your build backend _must support_ dynamic-metadata for this to work. Build
 backends known to support this currently include:
@@ -40,23 +44,25 @@ build-backend = "..."
 dynamic = ["version"]
 
 [[tool.dynamic-metadata]]
-provider = "dynamic_metadata.plugins.regex"
+provider = "dynamic_metadata.regex"
 field = "version"
 input = "src/my_package/__init__.py"
 ```
 
-Since this plugin lives inside `dynamic-metadata`, you have to include that in
-your requirements. Make sure the field is marked dynamic in your project table.
-The settings are defined by the plugin; see [Bundled plugins](plugins.md) for
-the full list of settings each one accepts.
+`dynamic_metadata.regex` is the registered name of the bundled plugin. Since it
+lives inside `dynamic-metadata`, you have to include that in your requirements.
+Make sure the field is marked dynamic in your project table. The settings are
+defined by the plugin; see [Bundled plugins](plugins.md) for the full list of
+settings each one accepts.
 
 ## Providing a custom plugin
 
 You don't have to publish a plugin, or even put it in an installed package, to
-use one. The optional `provider-path` key names a local directory to import the
-`provider` module from, so a plugin can live right inside your project alongside
-`pyproject.toml`. A provider loaded this way needs no runtime dependency on
-`dynamic-metadata` — it just has to expose the [hooks](plugin_authors.md).
+use one. Give `provider` as an **inline table** with a `path` (a local
+directory) and a `module` (imported from it), so a plugin can live right inside
+your project alongside `pyproject.toml`. A provider loaded this way needs no
+runtime dependency on `dynamic-metadata` — it just has to expose the
+[hooks](plugin_authors.md).
 
 Drop a module in your project — say `scripts/my_plugin.py`:
 
@@ -65,24 +71,22 @@ def dynamic_metadata(settings, project):
     return {"version": "1.2.3"}
 ```
 
-and point an entry at it with `provider-path`:
+and point an entry at it:
 
 ```toml
 [project]
 dynamic = ["version"]
 
 [[tool.dynamic-metadata]]
-provider = "my_plugin"
-provider-path = "scripts"
+provider = { path = "scripts", module = "my_plugin" }
 ```
 
-`provider` is still the module name (`my_plugin`, the file without its `.py`),
-and `provider-path` is the directory to find it in (relative to
-`pyproject.toml`). It must be an existing directory, and it is searched in
-isolation: a module of the same name reachable elsewhere on `sys.path` will not
-shadow or substitute for one missing from `provider-path`. A
-`"<module>:<Class>"` provider works the same way — the class is imported from
-`provider-path` and instantiated.
+`module` is the module name (`my_plugin`, the file without its `.py`), and
+`path` is the directory to find it in (relative to `pyproject.toml`). It must be
+an existing directory, and it is searched in isolation: a module of the same
+name reachable elsewhere on `sys.path` will not shadow or substitute for one
+missing from `path`. Use `module = "my_plugin:MyClass"` to load a class — it is
+imported and instantiated the same way.
 
 Because the module is imported, make sure any third-party packages it needs are
 available at build time. If they aren't already pulled in by your build backend,
@@ -105,6 +109,10 @@ $ dynamic-metadata show
 `[project]` table as JSON. Use `--pyproject-toml PATH` to point at another file
 and `--state` to choose the build state passed to plugins (default
 `metadata_wheel`).
+
+`dynamic-metadata providers` lists the provider names registered in your
+environment (the bundled plugins plus any installed third-party plugins) and the
+module each resolves to.
 
 ## Mixing static and dynamic values (PEP 808)
 

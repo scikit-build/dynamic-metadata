@@ -6,6 +6,10 @@ straight from its settings, and `readme_fragment` is single-purpose and always
 writes `readme`. Because they live inside `dynamic-metadata`, you must add
 `dynamic-metadata` to your `[build-system].requires` to use them.
 
+Each registers a provider name of `dynamic_metadata.` plus the heading below, so
+the `regex` plugin is `provider = "dynamic_metadata.regex"`. The examples use
+these names.
+
 Entries run in order and each sees the project resolved so far, so several
 entries can cooperate on one field: `readme_fragment` and `substitute` build a
 readme the way [hatch-fancy-pypi-readme][] assembles one — one entry per
@@ -24,7 +28,7 @@ assignment.
 dynamic = ["version"]
 
 [[tool.dynamic-metadata]]
-provider = "dynamic_metadata.plugins.regex"
+provider = "dynamic_metadata.regex"
 field = "version"
 input = "src/my_package/__init__.py"
 ```
@@ -50,7 +54,7 @@ resolved by earlier entries, demonstrating cross-field references.
 
 ```toml
 [[tool.dynamic-metadata]]
-provider = "dynamic_metadata.plugins.template"
+provider = "dynamic_metadata.template"
 field = "readme"
 result = "{project[name]} {project[version]}"
 ```
@@ -76,7 +80,7 @@ mapped to its value, returned verbatim.
 dynamic = ["version", "description"]
 
 [[tool.dynamic-metadata]]
-provider = "dynamic_metadata.plugins.static"
+provider = "dynamic_metadata.static"
 version = "1.2.3"
 description = "My package"
 ```
@@ -95,11 +99,11 @@ like `substitute` a _dynamic_ value to transform, which a field set in
 dynamic = ["version"]
 
 [[tool.dynamic-metadata]]
-provider = "dynamic_metadata.plugins.static"
+provider = "dynamic_metadata.static"
 version = "1.2.3-beta"
 
 [[tool.dynamic-metadata]]
-provider = "dynamic_metadata.plugins.substitute"
+provider = "dynamic_metadata.substitute"
 field = "version"
 pattern = "-beta$"
 replacement = "b0"
@@ -121,18 +125,18 @@ fragment; an entry with `path` reads a file and may slice it.
 dynamic = ["readme"]
 
 [[tool.dynamic-metadata]]
-provider = "dynamic_metadata.plugins.readme_fragment"
+provider = "dynamic_metadata.readme_fragment"
 content-type = "text/markdown"
 text = "# My Project\n\n"
 
 [[tool.dynamic-metadata]]
-provider = "dynamic_metadata.plugins.readme_fragment"
+provider = "dynamic_metadata.readme_fragment"
 path = "README.md"
 start-after = "<!-- start -->\n"
 end-before = "\n<!-- end -->"
 
 [[tool.dynamic-metadata]]
-provider = "dynamic_metadata.plugins.readme_fragment"
+provider = "dynamic_metadata.readme_fragment"
 path = "CHANGELOG.md"
 pattern = "(## .*?)(?=\n## )"
 ```
@@ -161,7 +165,7 @@ an assembled readme (for example, turning `#123` into a link).
 
 ```toml
 [[tool.dynamic-metadata]]
-provider = "dynamic_metadata.plugins.substitute"
+provider = "dynamic_metadata.substitute"
 field = "readme"
 pattern = "#(\\d+)"
 replacement = "[#\\1](https://github.com/org/repo/issues/\\1)"
@@ -184,7 +188,7 @@ working alongside it (braces and backslashes don't collide):
 
 ```toml
 [[tool.dynamic-metadata]]
-provider = "dynamic_metadata.plugins.substitute"
+provider = "dynamic_metadata.substitute"
 field = "readme"
 pattern = "#(\\d+)"
 replacement = "[#\\1](https://github.com/org/repo/v{project[version]}/issues/\\1)"
