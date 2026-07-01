@@ -43,7 +43,6 @@ if TYPE_CHECKING:
 
 __all__ = [
     "BuildState",
-    "list_providers",
     "load_dynamic_metadata",
     "load_provider",
     "process_dynamic_metadata",
@@ -258,27 +257,13 @@ def load_provider(
 
     loaded = _load_entry_point(provider)
     if loaded is None:
-        known = sorted(list_providers())
+        known = sorted({ep.name for ep in metadata.entry_points(PROVIDER_GROUP)})
         matches = difflib.get_close_matches(provider, known)
         hint = f"; did you mean {matches[0]!r}?" if matches else ""
         available = ", ".join(known) or "none"
         msg = f"Unknown provider {provider!r}{hint} (available: {available})"
         raise ModuleNotFoundError(msg)
     return _instantiate(loaded)
-
-
-def list_providers() -> dict[str, str]:
-    """Map each registered provider name to a human-readable descriptor.
-
-    Discovers every entry point in ``PROVIDER_GROUP`` (the bundled plugins plus
-    any installed third-party plugins). The descriptor is the entry-point value,
-    annotated with the providing distribution when available.
-    """
-    providers: dict[str, str] = {}
-    for ep in metadata.entry_points(PROVIDER_GROUP):
-        dist = _entry_point_dist(ep)
-        providers[ep.name] = f"{ep.value} ({dist})" if dist else ep.value
-    return providers
 
 
 def _provider_location(spec: Any) -> tuple[str, str | None]:

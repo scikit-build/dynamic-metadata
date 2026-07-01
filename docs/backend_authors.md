@@ -90,8 +90,9 @@ plugins are `dynamic_metadata.regex`, …); a name registered by more than one
 distribution is a hard error rather than a non-deterministic pick. This
 resolution is entirely internal to the loader; the backend-facing signatures of
 `process_dynamic_metadata` and `load_dynamic_metadata` are unchanged.
-`list_providers()` returns the registered names (useful for diagnostics), and
-the `dynamic-metadata providers` CLI prints them.
+`list_providers()` returns the registered names (useful for diagnostics); it
+lives in `discovery.py` rather than `loader.py`, since a backend does not need
+it to resolve metadata. The `dynamic-metadata providers` CLI prints them.
 
 The inline-table `path` lets a plugin live inside the project being built (a
 local directory not installed as a package). The reference loader installs a

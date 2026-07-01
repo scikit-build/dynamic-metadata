@@ -54,13 +54,14 @@ plugins should prefix with their own package). An **inline table**
 bare-import fallback. A duplicate name across distributions is a hard error. The
 loaded object is used per kind: module as-is, class instantiated with no args
 (hooks are bound methods sharing state via `self`), instance used directly.
-`list_providers()` enumerates names (also `dynamic-metadata providers`). The one
-required hook is `dynamic_metadata(settings, project) -> dict[str, Any]`. It
-returns a fragment of the `[project]` table (`{field: value, ...}`), so one
-plugin may set several fields. Three optional hooks:
-`build_state(build_state) -> None` (called once before `dynamic_metadata` with
-the current build state — a provider that cares stashes it, typically on `self`;
-the loader detects it via
+`list_providers()` enumerates names (also `dynamic-metadata providers`); it
+lives in `discovery.py`, kept out of the loader so `loader.py` stays the minimum
+a backend copies. The one required hook is
+`dynamic_metadata(settings, project) -> dict[str, Any]`. It returns a fragment
+of the `[project]` table (`{field: value, ...}`), so one plugin may set several
+fields. Three optional hooks: `build_state(build_state) -> None` (called once
+before `dynamic_metadata` with the current build state — a provider that cares
+stashes it, typically on `self`; the loader detects it via
 `isinstance(provider, DynamicMetadataBuildStateProtocol)`),
 `dynamic_wheel(settings) -> dict[str, bool]` (per-field METADATA 2.2 dynamic
 status; version must be false) and

@@ -6,7 +6,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 from ._compat import tomllib
-from .loader import BUILD_STATES, list_providers, process_dynamic_metadata
+from .discovery import list_providers
+from .loader import BUILD_STATES, process_dynamic_metadata
 
 if TYPE_CHECKING:
     from collections.abc import Sequence

@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 import dynamic_metadata.__main__
+import dynamic_metadata.discovery
 import dynamic_metadata.loader
 import dynamic_metadata.plugins
 from dynamic_metadata._compat import metadata as compat_metadata
@@ -1331,7 +1332,7 @@ def test_unknown_provider_suggests(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_list_providers_includes_bundled() -> None:
-    providers = dynamic_metadata.loader.list_providers()
+    providers = dynamic_metadata.discovery.list_providers()
     assert "dynamic_metadata.regex" in providers
     assert "dynamic_metadata.plugins.regex" in providers["dynamic_metadata.regex"]
 
