@@ -20,13 +20,13 @@ The protocols a provider may implement. Every provider satisfies
 `DynamicMetadataProtocol`; the others add optional hooks.
 
 ```{eval-rst}
-.. autoclass:: dynamic_metadata.loader.DynamicMetadataProtocol
+.. autoclass:: dynamic_metadata.protocols.DynamicMetadataProtocol
    :members:
-.. autoclass:: dynamic_metadata.loader.DynamicMetadataBuildStateProtocol
+.. autoclass:: dynamic_metadata.protocols.DynamicMetadataBuildStateProtocol
    :members:
-.. autoclass:: dynamic_metadata.loader.DynamicMetadataRequirementsProtocol
+.. autoclass:: dynamic_metadata.protocols.DynamicMetadataRequirementsProtocol
    :members:
-.. autoclass:: dynamic_metadata.loader.DynamicMetadataWheelProtocol
+.. autoclass:: dynamic_metadata.protocols.DynamicMetadataWheelProtocol
    :members:
 ```
 

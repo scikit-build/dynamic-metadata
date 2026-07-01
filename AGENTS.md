@@ -66,10 +66,11 @@ stashes it, typically on `self`; the loader detects it via
 `dynamic_wheel(settings) -> dict[str, bool]` (per-field METADATA 2.2 dynamic
 status; version must be false) and
 `get_requires_for_dynamic_metadata(settings) -> list[str]` (extra build
-requirements). Protocols are defined in `loader.py` (`DynamicMetadataProtocol`
-and subclasses). There is no `field` argument: generic plugins (`regex`,
-`template`) read their target from a `field` setting; single-purpose plugins
-hardcode it.
+requirements). Protocols are defined in `protocols.py`
+(`DynamicMetadataProtocol` and subclasses), along with the `BuildState` type and
+`BUILD_STATES` set; `loader.py` imports them. There is no `field` argument:
+generic plugins (`regex`, `template`) read their target from a `field` setting;
+single-purpose plugins hardcode it.
 
 ### Field taxonomy — `info.py`
 
