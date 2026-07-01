@@ -66,7 +66,9 @@ The documentation is split by audience:
 - **[For plugin authors](https://dynamic-metadata.readthedocs.io/en/latest/plugin_authors.html)**
   — implement the hooks; no runtime dependency on this package required.
 - **[For backend authors](https://dynamic-metadata.readthedocs.io/en/latest/backend_authors.html)**
-  — drive plugins from a build backend.
+  — drive plugins from a build backend by calling the reference loader.
+- **[Reimplementing the loader](https://dynamic-metadata.readthedocs.io/en/latest/backend_authors_reimplement.html)**
+  — drive plugins without a dependency on this package.
 
 <!-- SPHINX-END -->
 
