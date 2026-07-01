@@ -35,7 +35,9 @@ def test_load_provider_path_loads_local(tmp_path: Path) -> None:
         "def dynamic_metadata(settings, project):\n    return {'version': '1.2.3'}\n"
     )
 
-    provider = dynamic_metadata.loader.load_provider("local_prov_ok", str(plugin_dir))
+    provider = dynamic_metadata.loader.load_provider(
+        {"path": str(plugin_dir), "module": "local_prov_ok"}
+    )
     assert provider.dynamic_metadata({}, {}) == {"version": "1.2.3"}
 
 
@@ -72,7 +74,9 @@ def test_load_provider_path_not_shadowed(
     empty = tmp_path / "empty"
     empty.mkdir()
     with pytest.raises(ModuleNotFoundError):
-        dynamic_metadata.loader.load_provider("shadow_prov", str(empty))
+        dynamic_metadata.loader.load_provider(
+            {"path": str(empty), "module": "shadow_prov"}
+        )
 
 
 def test_template_basic() -> None:
@@ -1296,8 +1300,8 @@ def test_entry_point_load_failure_wrapped(
 def test_provider_path_ignores_entry_point(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # provider-path forces a raw import; a registered entry point of the same
-    # name is not consulted.
+    # The inline table forces a local import; a registered entry point of the
+    # same name is not consulted.
     _write_provider(
         tmp_path,
         "local",
@@ -1315,7 +1319,9 @@ def test_provider_path_ignores_entry_point(
         ),
     )
 
-    provider = dynamic_metadata.loader.load_provider("local", str(tmp_path))
+    provider = dynamic_metadata.loader.load_provider(
+        {"path": str(tmp_path), "module": "local"}
+    )
     assert provider.dynamic_metadata({}, {}) == {"version": "local"}
 
 

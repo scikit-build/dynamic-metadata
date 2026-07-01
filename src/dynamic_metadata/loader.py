@@ -166,35 +166,24 @@ def _merge_metadata(field: str, static: Any, dynamic: Any) -> Any:
     return merged_groups
 
 
-def _instantiate(obj: Any) -> DynamicMetadataProtocol:
-    """Turn a loaded object into the provider whose hooks are called.
-
-    A class is instantiated with no arguments so its hooks are bound methods and
-    may share state through ``self`` (e.g. the optional ``build_state`` hook
-    stashing the build state for ``dynamic_metadata`` to read). A module or an
-    already-instantiated object is used as-is.
-    """
-    return cast("DynamicMetadataProtocol", obj() if inspect.isclass(obj) else obj)
-
-
-def _import_provider(provider: str, provider_path: str) -> Any:
-    """Import ``provider`` (``"pkg.mod"`` or ``"pkg.mod:Class"``) from a directory.
+def _import_provider(module: str, path: str) -> Any:
+    """Import ``module`` (``"pkg.mod"`` or ``"pkg.mod:Class"``) from the ``path`` directory.
 
     Returns the module, or the named attribute within it, without instantiating.
     """
-    if not Path(provider_path).is_dir():
-        msg = "provider-path must be an existing directory"
+    if not Path(path).is_dir():
+        msg = f"provider 'path' {path!r} must be an existing directory"
         raise ValueError(msg)
 
-    module_name, _, class_name = provider.partition(":")
-    finder = _ProviderPathFinder([provider_path], module_name)
+    module_name, _, class_name = module.partition(":")
+    finder = _ProviderPathFinder([path], module_name)
     sys.meta_path.insert(0, finder)
     try:
-        module = importlib.import_module(module_name)
+        imported = importlib.import_module(module_name)
     finally:
         sys.meta_path.remove(finder)
 
-    return getattr(module, class_name) if class_name else module
+    return getattr(imported, class_name) if class_name else imported
 
 
 def _entry_point_dist(ep: EntryPoint) -> str | None:
@@ -204,16 +193,20 @@ def _entry_point_dist(ep: EntryPoint) -> str | None:
 
 
 def _load_entry_point(name: str) -> Any:
-    """Load a provider registered under ``name`` in ``PROVIDER_GROUP``.
+    """Load the provider registered under ``name`` in ``PROVIDER_GROUP``.
 
-    Returns the loaded object, or ``None`` if no entry point matches (the caller
-    turns this into an "unknown provider" error). Raises if more than one
-    distribution registers the name (a non-deterministic collision) or the entry
-    point cannot be loaded.
+    Raises if ``name`` is unknown (with a spelling hint), is registered by more
+    than one distribution (a non-deterministic collision), or fails to import.
     """
-    eps = [ep for ep in metadata.entry_points(PROVIDER_GROUP) if ep.name == name]
+    all_eps = list(metadata.entry_points(PROVIDER_GROUP))
+    eps = [ep for ep in all_eps if ep.name == name]
     if not eps:
-        return None
+        known = sorted({ep.name for ep in all_eps})
+        matches = difflib.get_close_matches(name, known)
+        hint = f"; did you mean {matches[0]!r}?" if matches else ""
+        available = ", ".join(known) or "none"
+        msg = f"Unknown provider {name!r}{hint} (available: {available})"
+        raise ModuleNotFoundError(msg)
     if len(eps) > 1:
         dists = ", ".join(sorted(_entry_point_dist(ep) or ep.value for ep in eps))
         msg = (
@@ -229,56 +222,35 @@ def _load_entry_point(name: str) -> Any:
         raise ImportError(msg) from exc
 
 
-def load_provider(
-    provider: str,
-    provider_path: str | None = None,
-) -> DynamicMetadataProtocol:
-    """Load a provider, returning the object whose hooks are called.
+def load_provider(provider: object) -> DynamicMetadataProtocol:
+    """Load a provider from its config value, returning the object whose hooks are called.
 
-    ``provider`` is resolved in one of two ways:
+    ``provider`` is the value of the ``provider`` key in a
+    ``[[tool.dynamic-metadata]]`` entry, in one of two forms:
 
-    * With ``provider_path`` (required for the module-path form), it is imported
-      from that directory as a module path (``"pkg.mod"`` or ``"pkg.mod:Class"``);
-      entry points are not consulted. This is for a plugin living inside the
-      project being built, not installed as a distribution.
-    * Otherwise it is a name registered in the ``PROVIDER_GROUP`` entry-point
-      group. An installed plugin is only reachable this way — a raw import path
-      without ``provider-path`` is not accepted.
+    * a **string** — a name registered in the ``PROVIDER_GROUP`` entry-point
+      group. Installed plugins are only reachable this way; a raw import path is
+      not accepted.
+    * an **inline table** ``{path, module}`` — a local plugin imported from the
+      ``path`` directory as a module path (``"pkg.mod"`` or ``"pkg.mod:Class"``),
+      for a plugin living inside the project being built. Entry points are not
+      consulted.
 
     A bare module is returned as-is (hooks are module-level functions); a class
-    is instantiated with no arguments; an already-instantiated object is used
-    directly.
+    is instantiated with no arguments so its hooks are bound methods sharing
+    state through ``self``; an already-instantiated object is used directly.
     """
-    if provider_path is not None:
-        return _instantiate(_import_provider(provider, provider_path))
-
-    loaded = _load_entry_point(provider)
-    if loaded is None:
-        known = sorted({ep.name for ep in metadata.entry_points(PROVIDER_GROUP)})
-        matches = difflib.get_close_matches(provider, known)
-        hint = f"; did you mean {matches[0]!r}?" if matches else ""
-        available = ", ".join(known) or "none"
-        msg = f"Unknown provider {provider!r}{hint} (available: {available})"
-        raise ModuleNotFoundError(msg)
-    return _instantiate(loaded)
-
-
-def _provider_location(spec: Any) -> tuple[str, str | None]:
-    """Resolve a ``provider`` value into ``(module, provider_path)``.
-
-    A string is a registered entry-point name (no path). An inline table names a
-    local plugin to import from a directory, with exactly ``path`` (the
-    directory) and ``module`` (``"pkg.mod"`` or ``"pkg.mod:Class"``) keys.
-    """
-    if isinstance(spec, str):
-        return spec, None
-    if not isinstance(spec, Mapping) or set(spec) != {"path", "module"}:
+    if isinstance(provider, str):
+        obj = _load_entry_point(provider)
+    elif isinstance(provider, Mapping) and set(provider) == {"path", "module"}:
+        obj = _import_provider(provider["module"], provider["path"])
+    else:
         msg = (
             "'provider' must be a registered name (string) or an inline table "
             "with exactly 'path' and 'module' keys"
         )
         raise ValueError(msg)
-    return spec["module"], spec["path"]
+    return cast("DynamicMetadataProtocol", obj() if inspect.isclass(obj) else obj)
 
 
 def load_dynamic_metadata(
@@ -296,8 +268,7 @@ def load_dynamic_metadata(
         # 'provider' is the only key the loader consumes; the rest are plugin
         # settings, passed through verbatim to the provider.
         settings = {k: v for k, v in entry.items() if k != "provider"}
-        provider = load_provider(*_provider_location(entry["provider"]))
-        yield provider, settings
+        yield load_provider(entry["provider"]), settings
 
 
 def process_dynamic_metadata(
