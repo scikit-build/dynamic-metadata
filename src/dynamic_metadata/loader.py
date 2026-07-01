@@ -177,25 +177,22 @@ def _instantiate(obj: Any) -> DynamicMetadataProtocol:
     return cast("DynamicMetadataProtocol", obj() if inspect.isclass(obj) else obj)
 
 
-def _import_provider(provider: str, provider_path: str | None = None) -> Any:
-    """Import ``provider`` (``"pkg.mod"`` or ``"pkg.mod:Class"``) as an object.
+def _import_provider(provider: str, provider_path: str) -> Any:
+    """Import ``provider`` (``"pkg.mod"`` or ``"pkg.mod:Class"``) from a directory.
 
     Returns the module, or the named attribute within it, without instantiating.
     """
-    module_name, _, class_name = provider.partition(":")
+    if not Path(provider_path).is_dir():
+        msg = "provider-path must be an existing directory"
+        raise ValueError(msg)
 
-    if provider_path is None:
+    module_name, _, class_name = provider.partition(":")
+    finder = _ProviderPathFinder([provider_path], module_name)
+    sys.meta_path.insert(0, finder)
+    try:
         module = importlib.import_module(module_name)
-    else:
-        if not Path(provider_path).is_dir():
-            msg = "provider-path must be an existing directory"
-            raise ValueError(msg)
-        finder = _ProviderPathFinder([provider_path], module_name)
-        sys.meta_path.insert(0, finder)
-        try:
-            module = importlib.import_module(module_name)
-        finally:
-            sys.meta_path.remove(finder)
+    finally:
+        sys.meta_path.remove(finder)
 
     return getattr(module, class_name) if class_name else module
 
