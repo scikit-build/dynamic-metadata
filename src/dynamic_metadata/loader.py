@@ -14,7 +14,6 @@ from typing import (
     Any,
     Literal,
     Protocol,
-    Union,
     cast,
     get_args,
     runtime_checkable,
@@ -80,17 +79,6 @@ class DynamicMetadataRequirementsProtocol(DynamicMetadataProtocol, Protocol):
 class DynamicMetadataWheelProtocol(DynamicMetadataProtocol, Protocol):
     def dynamic_wheel(self, settings: Mapping[str, Any]) -> dict[str, bool]: ...
 
-
-DMProtocols = Union[
-    DynamicMetadataProtocol,
-    DynamicMetadataBuildStateProtocol,
-    DynamicMetadataRequirementsProtocol,
-    DynamicMetadataWheelProtocol,
-]
-
-# The only per-entry key consumed by the loader itself; everything else is
-# plugin settings, passed through verbatim to the provider.
-RESERVED_KEYS = frozenset(["provider"])
 
 # Entry-point group a plugin distribution registers a named provider under. The
 # bundled plugins register here too (see pyproject.toml).
@@ -179,7 +167,7 @@ def _merge_metadata(field: str, static: Any, dynamic: Any) -> Any:
     return merged_groups
 
 
-def _instantiate(obj: Any) -> DMProtocols:
+def _instantiate(obj: Any) -> DynamicMetadataProtocol:
     """Turn a loaded object into the provider whose hooks are called.
 
     A class is instantiated with no arguments so its hooks are bound methods and
@@ -187,7 +175,7 @@ def _instantiate(obj: Any) -> DMProtocols:
     stashing the build state for ``dynamic_metadata`` to read). A module or an
     already-instantiated object is used as-is.
     """
-    return cast("DMProtocols", obj() if inspect.isclass(obj) else obj)
+    return cast("DynamicMetadataProtocol", obj() if inspect.isclass(obj) else obj)
 
 
 def _import_provider(provider: str, provider_path: str | None = None) -> Any:
@@ -222,10 +210,10 @@ def _entry_point_dist(ep: EntryPoint) -> str | None:
 def _load_entry_point(name: str) -> Any:
     """Load a provider registered under ``name`` in ``PROVIDER_GROUP``.
 
-    Returns the loaded object, or ``None`` if no entry point matches (so the
-    caller can fall back to importing ``name`` as a module). Raises if more than
-    one distribution registers the name (a non-deterministic collision) or the
-    entry point cannot be loaded.
+    Returns the loaded object, or ``None`` if no entry point matches (the caller
+    turns this into an "unknown provider" error). Raises if more than one
+    distribution registers the name (a non-deterministic collision) or the entry
+    point cannot be loaded.
     """
     eps = [ep for ep in metadata.entry_points(PROVIDER_GROUP) if ep.name == name]
     if not eps:
@@ -248,7 +236,7 @@ def _load_entry_point(name: str) -> Any:
 def load_provider(
     provider: str,
     provider_path: str | None = None,
-) -> DMProtocols:
+) -> DynamicMetadataProtocol:
     """Load a provider, returning the object whose hooks are called.
 
     ``provider`` is resolved in one of two ways:
@@ -313,7 +301,7 @@ def _provider_location(spec: Any) -> tuple[str, str | None]:
 
 def load_dynamic_metadata(
     entries: Sequence[Mapping[str, Any]],
-) -> Generator[tuple[DMProtocols, dict[str, Any]], None, None]:
+) -> Generator[tuple[DynamicMetadataProtocol, dict[str, Any]], None, None]:
     """Load each entry's provider, yielding it with its plugin settings.
 
     Entries are processed in order; ``provider`` is consumed here and the
@@ -323,7 +311,9 @@ def load_dynamic_metadata(
         if "provider" not in entry:
             msg = "Each [[tool.dynamic-metadata]] entry must set a 'provider'"
             raise KeyError(msg)
-        settings = {k: v for k, v in entry.items() if k not in RESERVED_KEYS}
+        # 'provider' is the only key the loader consumes; the rest are plugin
+        # settings, passed through verbatim to the provider.
+        settings = {k: v for k, v in entry.items() if k != "provider"}
         provider = load_provider(*_provider_location(entry["provider"]))
         yield provider, settings
 
