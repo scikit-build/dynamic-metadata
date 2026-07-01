@@ -1,15 +1,15 @@
 # For backend authors
 
-**You do not need to depend on dynamic-metadata to support plugins.** This page
-describes everything a build backend has to do to drive plugins. You can call
-the reference loader in {mod}`dynamic_metadata.loader` directly (a build-time
-dependency), vendor it, or reimplement it from the description below — the
-behaviour is what matters, not the code.
-
 A backend's job is small: collect the ordered `[[tool.dynamic-metadata]]`
 entries, load each entry's `provider`, and call its hooks at the right point in
 the [PEP 517][] build. Because the entries are an explicit ordered list, there
 is no dependency graph to solve.
+
+The easiest way to do this is to take a build-time dependency on this package
+and call the reference loader in {mod}`dynamic_metadata.loader`, which is what
+this page shows. **You do not have to depend on us**, though: you can vendor the
+loader or reimplement it from a precise description of its behaviour — see
+[Reimplementing the loader](backend_authors_reimplement.md).
 
 ## Where plugins plug into a build
 
@@ -55,67 +55,6 @@ entries = pyproject.get("tool", {}).get("dynamic-metadata", [])
 A field is only eligible if it appears in `project["dynamic"]`; the loader
 enforces this for you.
 
-## Loading a provider
-
-A `provider` takes one of two shapes. A **string** is a name registered in the
-`dynamic_metadata.provider` entry-point group. An **inline table**
-`{ path, module }` names a local plugin: `module` (`"pkg.mod"` or
-`"pkg.mod:Class"`) is imported from the `path` directory. The module-path form
-is _only_ available via the table — an installed plugin is reachable through its
-entry point, not a bare import string.
-
-The loaded object is used according to its kind: a module is used as-is (hooks
-are module-level functions); a class is instantiated with no arguments (hooks
-are bound methods and can share state through `self`); an already-instantiated
-object (a `module:instance` entry point) is used directly.
-
-```python
-from dynamic_metadata._compat.metadata import entry_points
-
-
-def load_provider(spec):
-    if not isinstance(spec, str):  # inline table {path, module}
-        return import_from_path(spec["module"], spec["path"])  # see below
-    matches = [
-        ep for ep in entry_points("dynamic_metadata.provider") if ep.name == spec
-    ]
-    if not matches:
-        raise ModuleNotFoundError(f"Unknown provider {spec!r}")
-    obj = matches[0].load()  # >1 match is a collision → hard error
-    return obj() if isinstance(obj, type) else obj
-```
-
-Names are conventionally prefixed with the providing package (the bundled
-plugins are `dynamic_metadata.regex`, …); a name registered by more than one
-distribution is a hard error rather than a non-deterministic pick. This
-resolution is entirely internal to the loader; the backend-facing signatures of
-`process_dynamic_metadata` and `load_dynamic_metadata` are unchanged.
-`list_providers()` returns the registered names (useful for diagnostics); it
-lives in `discovery.py` rather than `loader.py`, since a backend does not need
-it to resolve metadata. The `dynamic-metadata providers` CLI prints them.
-
-The inline-table `path` lets a plugin live inside the project being built (a
-local directory not installed as a package). The reference loader installs a
-`sys.meta_path` finder scoped to that directory for the single import —
-mirroring how `pyproject_hooks` handles PEP 517's `backend-path` — so the
-in-tree provider wins over any same-named installed module and a missing
-provider raises rather than silently importing the wrong one. See
-`load_provider` and `_ProviderPathFinder` in {mod}`dynamic_metadata.loader` for
-the full implementation; reuse it unless you have a reason not to.
-
-## Detecting the optional hooks
-
-Every provider implements `dynamic_metadata`. The three optional hooks are
-detected by their presence; the reference loader exposes runtime-checkable
-`Protocol`s so you can test with `isinstance`, but a `hasattr` check is
-equivalent:
-
-| Hook                                | Protocol                              | When the backend calls it         |
-| ----------------------------------- | ------------------------------------- | --------------------------------- |
-| `build_state(state)`                | `DynamicMetadataBuildStateProtocol`   | once, before `dynamic_metadata`   |
-| `get_requires_for_dynamic_metadata` | `DynamicMetadataRequirementsProtocol` | during `get_requires_for_build_*` |
-| `dynamic_wheel(settings)`           | `DynamicMetadataWheelProtocol`        | after metadata, for METADATA 2.2  |
-
 ## Collecting build requirements
 
 In your `get_requires_for_build_*` hooks, load each provider and union in
@@ -142,95 +81,24 @@ hands back the leftover keys as `settings` (it consumes only `provider`).
 
 ## Resolving the metadata
 
-This is the core loop. Apply entries in order; each provider sees a **read-only
-snapshot of the project as resolved so far**, returns a `dict` fragment of
-`[project]`, and the fragment is merged in. A later entry can read an earlier
-one's output with `project[field]`; a forward reference is just a `KeyError`,
-and cycles are impossible because nothing can read ahead.
-
-Here is the loop with the validation and merge details inlined — a trimmed
-version of `process_dynamic_metadata`:
+`process_dynamic_metadata` is the core call. It applies the entries in order,
+giving each provider a read-only snapshot of the project as resolved so far,
+merges each returned fragment into `[project]`, and removes each resolved field
+from `dynamic`.
 
 ```python
-from types import MappingProxyType
-from dynamic_metadata.info import ALL_FIELDS, SCALAR_FIELDS
-from dynamic_metadata.loader import (
-    DynamicMetadataBuildStateProtocol,
-    load_dynamic_metadata,
-)
+from dynamic_metadata.loader import process_dynamic_metadata
 
-
-def process_dynamic_metadata(project, entries, build_state):
-    result = dict(project)
-    result["dynamic"] = list(result.get("dynamic", []))
-    declared = set(result["dynamic"])
-    snapshot = MappingProxyType(result)  # read-only view, updated in place
-
-    produced = set()  # fields a *previous entry* wrote (vs. a static value)
-
-    for provider, settings in load_dynamic_metadata(entries):
-        if isinstance(provider, DynamicMetadataBuildStateProtocol):
-            provider.build_state(build_state)
-        fragment = provider.dynamic_metadata(settings, snapshot)
-
-        for field, value in fragment.items():
-            if field not in ALL_FIELDS:
-                raise KeyError(f"{field!r} is not a settable field")
-            if field not in declared:
-                raise KeyError(f"{field!r} must be listed in project.dynamic")
-
-            if field in produced and field in SCALAR_FIELDS:
-                result[field] = value  # transform: replace
-            elif field in result:
-                result[field] = merge(field, result[field], value)  # PEP 808 add
-            else:
-                result[field] = value
-
-            produced.add(field)
-            if field in result["dynamic"]:
-                result["dynamic"].remove(field)
-
-    return result
+project = process_dynamic_metadata(project, entries, build_state="wheel")
 ```
 
-Key points a reimplementation must preserve:
-
-- **`snapshot` is a live read-only view** of `result`. Because
-  `MappingProxyType` wraps the same dict, every provider sees fields written by
-  earlier entries without you rebuilding the snapshot. It is read-only so a
-  provider cannot mutate the project out from under the loader.
-- **Validate against the field taxonomy.** A returned field must be in
-  `ALL_FIELDS` (`name` and `dynamic` are intentionally excluded) and must be
-  listed in `project.dynamic`. `info.py` is the single source of truth for the
-  settable fields and their shapes — use it rather than hardcoding a list.
-- **A field is resolved once written:** remove it from `dynamic`. After the
-  loop, anything left in `dynamic` was declared but never produced — surface
-  that as an error if your backend requires every dynamic field to be filled.
-
-## Merge semantics (PEP 808)
-
-`merge(field, current, addition)` combines a field's current value with a
-provider's fragment. The rule depends on the field's shape (from `info.py`) and
-on whether `current` is a _static_ value or an _earlier entry's_ output:
-
-- **List fields** (`dependencies`, `classifiers`, `authors`, …): concatenate,
-  existing entries first. A provider returns only its additions.
-- **Table fields** (`urls`, `scripts`, `entry-points`, `optional-dependencies`,
-  …): add keys only ([PEP 808][] is add-only). A provider may **not** change the
-  value of a key that already exists — raise if it tries.
-- **Scalar fields** (`version`, `description`, `requires-python`, `license`,
-  `readme`): cannot be extended.
-  - Against a **static** value this is the illegal "static _and_ dynamic" case —
-    raise.
-  - Against an **earlier entry's** output (tracked by `produced`) a later entry
-    **replaces** it, enabling a transform pipeline (one plugin extracts a
-    version, another normalizes it). This is the
-    `field in produced and field in SCALAR_FIELDS` branch above.
-
-The `produced` set is what distinguishes "a user wrote this in `[project]`" from
-"an earlier plugin computed this", which is the only thing the static-vs-replace
-decision turns on. See `_merge_metadata` and `_merge_dict` in
-{mod}`dynamic_metadata.loader` for the per-shape implementation.
+After it returns, anything left in `project["dynamic"]` was declared but never
+produced — surface that as an error if your backend requires every dynamic field
+to be filled. You still have access to the original dynamic list, of course, if
+you need it. The exact ordering, validation, and merge rules the loader applies
+are documented in
+[Reimplementing the loader](backend_authors_reimplement.md#resolving-the-metadata);
+you only need them if you are replacing this call.
 
 ## METADATA 2.2 dynamic status
 
@@ -260,26 +128,18 @@ can rely on its inputs already being validated.
 
 ## Telling a provider the build state
 
-If a provider implements `build_state`, call it once with the build-state string
-**before** `dynamic_metadata` (as shown in the loop). A provider uses it to
-adapt — for example, reading a value back out of an SDist's `PKG-INFO` during a
-wheel build instead of recomputing it. Providers that do not care omit the hook.
+If a provider implements `build_state`, the loader calls it once with the
+build-state string **before** `dynamic_metadata`. A provider uses it to adapt —
+for example, reading a value back out of an SDist's `PKG-INFO` during a wheel
+build instead of recomputing it. Providers that do not care omit the hook; you
+just have to pass the right `build_state` value (from the table above) into
+`process_dynamic_metadata`.
 
-## Using the reference loader directly
+## See also
 
-If you are fine taking a build-time dependency, you do not need any of the code
-above — call the loader:
-
-```python
-from dynamic_metadata.loader import process_dynamic_metadata
-
-project = process_dynamic_metadata(project, entries, build_state="wheel")
-```
-
-and use `load_dynamic_metadata` for the `get_requires` and `dynamic_wheel`
-passes. The [API reference](api/index.md) documents the protocols, the
+The [API reference](api/index.md) documents the protocols, the
 `dynamic_metadata.info` field taxonomy the loader validates against, and the
-plugin helpers.
+plugin helpers. If you would rather not depend on this package, see
+[Reimplementing the loader](backend_authors_reimplement.md).
 
 [PEP 517]: https://peps.python.org/pep-0517/
-[PEP 808]: https://peps.python.org/pep-0808/
