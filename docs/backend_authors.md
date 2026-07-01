@@ -5,10 +5,10 @@ entries, load each entry's `provider`, and call its hooks at the right point in
 the [PEP 517][] build. Because the entries are an explicit ordered list, there
 is no dependency graph to solve.
 
-The easiest way to do this is to take a build-time dependency on this package
-and call the reference loader in {mod}`dynamic_metadata.loader`, which is what
-this page shows. **You do not have to depend on us**, though: you can vendor the
-loader or reimplement it from a precise description of its behaviour — see
+The easiest way is a build-time dependency on this package, calling the
+reference loader in {mod}`dynamic_metadata.loader` — what this page shows. **You
+do not have to depend on us**, though: you can vendor the loader or reimplement
+it from a precise description of its behaviour — see
 [Reimplementing the loader](backend_authors_reimplement.md).
 
 ## Where plugins plug into a build
@@ -93,9 +93,7 @@ project = process_dynamic_metadata(project, entries, build_state="wheel")
 
 After it returns, anything left in `project["dynamic"]` was declared but never
 produced — surface that as an error if your backend requires every dynamic field
-to be filled. You still have access to the original dynamic list, of course, if
-you need it. The exact ordering, validation, and merge rules the loader applies
-are documented in
+to be filled. The exact ordering, validation, and merge rules are documented in
 [Reimplementing the loader](backend_authors_reimplement.md#resolving-the-metadata);
 you only need them if you are replacing this call.
 
