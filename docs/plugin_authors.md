@@ -55,8 +55,6 @@ project as resolved so far; read another field's value with
 
 ## Optional hooks
 
-There are three optional hooks.
-
 ### Receiving the build state
 
 ```python

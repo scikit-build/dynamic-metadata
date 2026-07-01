@@ -33,7 +33,7 @@ backends known to support this currently include:
 
 ## Example: regex
 
-An example regex plugin is provided in this package. It is used like this:
+The bundled regex plugin is used like this:
 
 ```toml
 [build-system]
