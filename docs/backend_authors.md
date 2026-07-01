@@ -30,7 +30,8 @@ and producing the final `[project]` metadata. Wire them in like this:
 `build_state` is the string you pass into the loader so a provider can tell
 which build it is taking part in (see
 [Telling a provider the build state](#telling-a-provider-the-build-state)). It
-must be one of the five values above (`dynamic_metadata.loader.BUILD_STATES`).
+must be one of the five values above
+(`dynamic_metadata.protocols.BUILD_STATES`).
 
 Run all hooks from the same directory PEP 517 uses (the project root), since
 plugins resolve relative paths like `input = "src/pkg/__init__.py"` against the
@@ -62,10 +63,8 @@ anything it asks for. This is how a provider that wraps an external tool gets
 its dependency installed without the user listing it.
 
 ```python
-from dynamic_metadata.loader import (
-    DynamicMetadataRequirementsProtocol,
-    load_dynamic_metadata,
-)
+from dynamic_metadata.loader import load_dynamic_metadata
+from dynamic_metadata.protocols import DynamicMetadataRequirementsProtocol
 
 
 def collect_requires(entries):
@@ -108,10 +107,8 @@ and the wheel built from it. Ask each provider which of its fields are dynamic
 in that sense via the optional `dynamic_wheel` hook:
 
 ```python
-from dynamic_metadata.loader import (
-    DynamicMetadataWheelProtocol,
-    load_dynamic_metadata,
-)
+from dynamic_metadata.loader import load_dynamic_metadata
+from dynamic_metadata.protocols import DynamicMetadataWheelProtocol
 
 
 def dynamic_wheel_fields(entries):

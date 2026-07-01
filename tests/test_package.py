@@ -11,6 +11,7 @@ import dynamic_metadata.__main__
 import dynamic_metadata.discovery
 import dynamic_metadata.loader
 import dynamic_metadata.plugins
+import dynamic_metadata.protocols
 from dynamic_metadata._compat import metadata as compat_metadata
 
 if TYPE_CHECKING:
@@ -334,7 +335,7 @@ def test_build_state_hook_drives_result(tmp_path: Path) -> None:
         "        return {'version': 'reused'}\n"
     )
 
-    def run(build_state: dynamic_metadata.loader.BuildState) -> Any:
+    def run(build_state: dynamic_metadata.protocols.BuildState) -> Any:
         return dynamic_metadata.loader.process_dynamic_metadata(
             {"name": "test", "dynamic": ["version"]},
             [
@@ -394,10 +395,12 @@ def test_load_dynamic_metadata_aggregates_requires_and_wheel(
     for provider, settings in dynamic_metadata.loader.load_dynamic_metadata(entries):
         if isinstance(
             provider,
-            dynamic_metadata.loader.DynamicMetadataRequirementsProtocol,
+            dynamic_metadata.protocols.DynamicMetadataRequirementsProtocol,
         ):
             requires += provider.get_requires_for_dynamic_metadata(settings)
-        if isinstance(provider, dynamic_metadata.loader.DynamicMetadataWheelProtocol):
+        if isinstance(
+            provider, dynamic_metadata.protocols.DynamicMetadataWheelProtocol
+        ):
             dynamic_wheel.update(provider.dynamic_wheel(settings))
 
     assert requires == ["some-dep>=1"]

@@ -7,12 +7,13 @@ from typing import TYPE_CHECKING, cast
 
 from ._compat import tomllib
 from .discovery import list_providers
-from .loader import BUILD_STATES, process_dynamic_metadata
+from .loader import process_dynamic_metadata
+from .protocols import BUILD_STATES
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from .loader import BuildState
+    from .protocols import BuildState
 
 __all__ = ["main"]
 
