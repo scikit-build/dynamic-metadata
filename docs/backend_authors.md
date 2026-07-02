@@ -58,25 +58,18 @@ enforces this for you.
 
 ## Collecting build requirements
 
-In your `get_requires_for_build_*` hooks, load each provider and union in
-anything it asks for. This is how a provider that wraps an external tool gets
-its dependency installed without the user listing it.
+In your `get_requires_for_build_*` hooks, add anything the providers ask for.
+This is how a provider that wraps an external tool gets its dependency installed
+without the user listing it.
 
 ```python
-from dynamic_metadata.loader import load_dynamic_metadata
-from dynamic_metadata.protocols import DynamicMetadataRequirementsProtocol
+from dynamic_metadata.loader import get_requires_for_dynamic_metadata
 
-
-def collect_requires(entries):
-    requires = []
-    for provider, settings in load_dynamic_metadata(entries):
-        if isinstance(provider, DynamicMetadataRequirementsProtocol):
-            requires += provider.get_requires_for_dynamic_metadata(settings)
-    return requires
+requires += get_requires_for_dynamic_metadata(entries)
 ```
 
-`load_dynamic_metadata` is a thin generator that loads each entry's provider and
-hands back the leftover keys as `settings` (it consumes only `provider`).
+Requirements are collected in entry order; a provider without the optional hook
+contributes nothing.
 
 ## Resolving the metadata
 
@@ -99,27 +92,24 @@ you only need them if you are replacing this call.
 
 ## METADATA 2.2 dynamic status
 
-After resolving metadata you write a `METADATA` file. METADATA 2.2 lets a field
-be marked `Dynamic`, meaning its value may legitimately differ between the SDist
-and the wheel built from it. Ask each provider which of its fields are dynamic
-in that sense via the optional `dynamic_wheel` hook:
+When building an SDist you write a `PKG-INFO` file. METADATA 2.2 lets a field in
+it be marked `Dynamic`, meaning its value may legitimately differ between the
+SDist and a wheel built from it. `dynamic_wheel_fields` asks each provider via
+the optional `dynamic_wheel` hook and returns the set of field names to mark:
 
 ```python
-from dynamic_metadata.loader import load_dynamic_metadata
-from dynamic_metadata.protocols import DynamicMetadataWheelProtocol
+from dynamic_metadata.loader import dynamic_wheel_fields
 
-
-def dynamic_wheel_fields(entries):
-    fields = {}
-    for provider, settings in load_dynamic_metadata(entries):
-        if isinstance(provider, DynamicMetadataWheelProtocol):
-            fields.update(provider.dynamic_wheel(settings))
-    return {field for field, is_dynamic in fields.items() if is_dynamic}
+fields = dynamic_wheel_fields(entries)
 ```
 
-A field a provider does not mention defaults to **not** dynamic, and `version`
-must never be dynamic. Call this hook after `dynamic_metadata`, so a provider
-can rely on its inputs already being validated.
+A field no provider mentions is **not** dynamic, and `version` may never be. A
+field is dynamic if _any_ provider reports it so: contributions to a field
+merge, so one dynamic part makes the merged value dynamic (PEP 643 permits
+marking a field `Dynamic` even when a value is also given). Call it after
+`process_dynamic_metadata`, so a provider may assume its settings were already
+validated by the main hook — but note providers are loaded fresh, so
+`dynamic_wheel` cannot rely on state stashed during `dynamic_metadata`.
 
 ## Telling a provider the build state
 
