@@ -80,18 +80,39 @@ detected by their presence — a plain `hasattr` check:
 | `get_requires_for_dynamic_metadata` | `get_requires_for_dynamic_metadata` | during `get_requires_for_build_*` |
 | `dynamic_wheel(settings)`           | `dynamic_wheel`                     | after metadata, for METADATA 2.2  |
 
-The requirements and METADATA 2.2 passes are the loops shown on the
-[backend authors](backend_authors.md#collecting-build-requirements) page, with
-each `isinstance(provider, SomeProtocol)` replaced by `hasattr(provider, ...)`:
+The requirements and METADATA 2.2 passes are simple collection loops
+(`get_requires_for_dynamic_metadata` and `dynamic_wheel_fields` in
+{mod}`dynamic_metadata.loader`, with each `isinstance(provider, SomeProtocol)`
+replaced by `hasattr(provider, ...)`):
 
 ```python
-def collect_requires(entries):
+def get_requires_for_dynamic_metadata(entries):
     requires = []
     for provider, settings in load_dynamic_metadata(entries):
         if hasattr(provider, "get_requires_for_dynamic_metadata"):
             requires += provider.get_requires_for_dynamic_metadata(settings)
     return requires
+
+
+def dynamic_wheel_fields(entries):
+    fields = set()
+    for provider, settings in load_dynamic_metadata(entries):
+        if not hasattr(provider, "dynamic_wheel"):
+            continue
+        for field, is_dynamic in provider.dynamic_wheel(settings).items():
+            if field not in ALL_FIELDS:
+                raise KeyError(f"{field!r} is not a settable field")
+            if field == "version" and is_dynamic:
+                raise ValueError("'version' may never be dynamic")
+            if is_dynamic:
+                fields.add(field)
+    return fields
 ```
+
+`dynamic_wheel_fields` must validate reported names against the field taxonomy,
+reject a dynamic `version`, and treat a field as dynamic if _any_ provider says
+so — contributions to a field merge, so one dynamic part makes the merged value
+dynamic.
 
 ## The field taxonomy
 

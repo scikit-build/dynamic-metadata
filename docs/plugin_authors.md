@@ -83,8 +83,9 @@ def dynamic_wheel(
 It returns a map from each field this plugin sets to whether that field's value
 can change between the SDist and the wheel (the METADATA 2.2 feature). A field
 not present defaults to "false", and `"version"` must always be "false". This
-hook is called after the main hook, so you do not need to validate the input
-here.
+hook runs after the main hook in the build, so you do not need to validate the
+input here — but it may be called on a fresh instance, so do not rely on state
+stashed by `dynamic_metadata` or `build_state`.
 
 ### Extra build requirements
 

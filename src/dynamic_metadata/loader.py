@@ -29,6 +29,8 @@ from .protocols import (
     BuildState,
     DynamicMetadataBuildStateProtocol,
     DynamicMetadataProtocol,
+    DynamicMetadataRequirementsProtocol,
+    DynamicMetadataWheelProtocol,
 )
 
 if TYPE_CHECKING:
@@ -39,6 +41,8 @@ if TYPE_CHECKING:
 
 
 __all__ = [
+    "dynamic_wheel_fields",
+    "get_requires_for_dynamic_metadata",
     "load_dynamic_metadata",
     "load_provider",
     "process_dynamic_metadata",
@@ -309,3 +313,48 @@ def process_dynamic_metadata(
                 result["dynamic"].remove(field)
 
     return result
+
+
+def get_requires_for_dynamic_metadata(
+    entries: Sequence[Mapping[str, Any]],
+) -> list[str]:
+    """Collect every provider's extra build requirements, in entry order.
+
+    Call this from each PEP 517 ``get_requires_for_build_*`` hook. A provider
+    without the optional ``get_requires_for_dynamic_metadata`` hook contributes
+    nothing.
+    """
+    requires = []
+    for provider, settings in load_dynamic_metadata(entries):
+        if isinstance(provider, DynamicMetadataRequirementsProtocol):
+            requires += provider.get_requires_for_dynamic_metadata(settings)
+    return requires
+
+
+def dynamic_wheel_fields(entries: Sequence[Mapping[str, Any]]) -> set[str]:
+    """Collect the fields to mark ``Dynamic`` in SDist metadata (METADATA 2.2).
+
+    Asks each provider's optional ``dynamic_wheel`` hook which fields may
+    legitimately differ between the SDist and a wheel built from it. A field is
+    dynamic if *any* provider reports it ``True``: contributions to a field
+    merge, so one dynamic part makes the merged value dynamic (PEP 643 permits
+    marking a field ``Dynamic`` even when its value is also given). A field no
+    provider mentions is not dynamic, and ``version`` may never be.
+
+    Providers are loaded fresh here, so ``dynamic_wheel`` cannot rely on state
+    from a ``dynamic_metadata`` call.
+    """
+    fields: set[str] = set()
+    for provider, settings in load_dynamic_metadata(entries):
+        if not isinstance(provider, DynamicMetadataWheelProtocol):
+            continue
+        for field, is_dynamic in provider.dynamic_wheel(settings).items():
+            if field not in ALL_FIELDS:
+                msg = f"{field!r} is not a settable dynamic-metadata field"
+                raise KeyError(msg)
+            if field == "version" and is_dynamic:
+                msg = "'version' may never differ between the SDist and a wheel"
+                raise ValueError(msg)
+            if is_dynamic:
+                fields.add(field)
+    return fields

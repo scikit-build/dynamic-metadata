@@ -363,48 +363,123 @@ def test_build_state_rejects_unknown_value() -> None:
         )
 
 
-def test_load_dynamic_metadata_aggregates_requires_and_wheel(
-    tmp_path: Path,
-) -> None:
-    # The backend-author pattern (see docs/backend_authors.md): iterate
-    # load_dynamic_metadata and use the runtime-checkable protocols to collect
-    # each provider's extra build requirements and METADATA 2.2 dynamic status.
-    # A provider implementing neither hook is simply skipped.
+def test_get_requires_for_dynamic_metadata(tmp_path: Path) -> None:
+    # Requirements are collected in entry order; a provider without the hook is
+    # simply skipped.
     plugin_dir = tmp_path / "plugins"
     plugin_dir.mkdir()
-    (plugin_dir / "full_prov.py").write_text(
+    (plugin_dir / "req_prov.py").write_text(
         "class Provider:\n"
         "    def get_requires_for_dynamic_metadata(self, settings):\n"
         "        return ['some-dep>=1']\n"
-        "    def dynamic_wheel(self, settings):\n"
-        "        return {'version': False, 'dependencies': True}\n"
         "    def dynamic_metadata(self, settings, project):\n"
         "        return {'version': '1.2.3'}\n"
     )
     (plugin_dir / "bare_prov.py").write_text(
         "def dynamic_metadata(settings, project):\n    return {'description': 'hi'}\n"
     )
+    (plugin_dir / "req_prov2.py").write_text(
+        "def get_requires_for_dynamic_metadata(settings):\n"
+        "    return ['other-dep']\n"
+        "def dynamic_metadata(settings, project):\n"
+        "    return {'description': 'hi'}\n"
+    )
 
-    entries = [
-        {"provider": {"path": str(plugin_dir), "module": "full_prov:Provider"}},
-        {"provider": {"path": str(plugin_dir), "module": "bare_prov"}},
-    ]
+    requires = dynamic_metadata.loader.get_requires_for_dynamic_metadata(
+        [
+            {"provider": {"path": str(plugin_dir), "module": "req_prov:Provider"}},
+            {"provider": {"path": str(plugin_dir), "module": "bare_prov"}},
+            {"provider": {"path": str(plugin_dir), "module": "req_prov2"}},
+        ]
+    )
 
-    requires = []
-    dynamic_wheel = {}
-    for provider, settings in dynamic_metadata.loader.load_dynamic_metadata(entries):
-        if isinstance(
-            provider,
-            dynamic_metadata.protocols.DynamicMetadataRequirementsProtocol,
-        ):
-            requires += provider.get_requires_for_dynamic_metadata(settings)
-        if isinstance(
-            provider, dynamic_metadata.protocols.DynamicMetadataWheelProtocol
-        ):
-            dynamic_wheel.update(provider.dynamic_wheel(settings))
+    assert requires == ["some-dep>=1", "other-dep"]
 
-    assert requires == ["some-dep>=1"]
-    assert dynamic_wheel == {"version": False, "dependencies": True}
+
+def test_dynamic_wheel_fields(tmp_path: Path) -> None:
+    # Only fields reported True are dynamic; unmentioned fields (and providers
+    # without the hook) default to not dynamic.
+    plugin_dir = tmp_path / "plugins"
+    plugin_dir.mkdir()
+    (plugin_dir / "wheel_prov.py").write_text(
+        "class Provider:\n"
+        "    def dynamic_wheel(self, settings):\n"
+        "        return {'version': False, 'dependencies': True}\n"
+        "    def dynamic_metadata(self, settings, project):\n"
+        "        return {'version': '1.2.3', 'dependencies': ['numpy']}\n"
+    )
+    (plugin_dir / "bare_prov.py").write_text(
+        "def dynamic_metadata(settings, project):\n    return {'description': 'hi'}\n"
+    )
+
+    fields = dynamic_metadata.loader.dynamic_wheel_fields(
+        [
+            {"provider": {"path": str(plugin_dir), "module": "wheel_prov:Provider"}},
+            {"provider": {"path": str(plugin_dir), "module": "bare_prov"}},
+        ]
+    )
+
+    assert fields == {"dependencies"}
+
+
+def test_dynamic_wheel_fields_any_true_wins(tmp_path: Path) -> None:
+    # Contributions to a field merge, so it is dynamic if *any* provider says
+    # so; a later False does not retract an earlier True.
+    plugin_dir = tmp_path / "plugins"
+    plugin_dir.mkdir()
+    (plugin_dir / "wheel_true.py").write_text(
+        "def dynamic_wheel(settings):\n"
+        "    return {'dependencies': True}\n"
+        "def dynamic_metadata(settings, project):\n"
+        "    return {'dependencies': ['a']}\n"
+    )
+    (plugin_dir / "wheel_false.py").write_text(
+        "def dynamic_wheel(settings):\n"
+        "    return {'dependencies': False}\n"
+        "def dynamic_metadata(settings, project):\n"
+        "    return {'dependencies': ['b']}\n"
+    )
+
+    fields = dynamic_metadata.loader.dynamic_wheel_fields(
+        [
+            {"provider": {"path": str(plugin_dir), "module": "wheel_true"}},
+            {"provider": {"path": str(plugin_dir), "module": "wheel_false"}},
+        ]
+    )
+
+    assert fields == {"dependencies"}
+
+
+def test_dynamic_wheel_fields_rejects_unknown_field(tmp_path: Path) -> None:
+    plugin_dir = tmp_path / "plugins"
+    plugin_dir.mkdir()
+    (plugin_dir / "wheel_bad.py").write_text(
+        "def dynamic_wheel(settings):\n"
+        "    return {'not-a-field': True}\n"
+        "def dynamic_metadata(settings, project):\n"
+        "    return {}\n"
+    )
+
+    with pytest.raises(KeyError, match="settable"):
+        dynamic_metadata.loader.dynamic_wheel_fields(
+            [{"provider": {"path": str(plugin_dir), "module": "wheel_bad"}}]
+        )
+
+
+def test_dynamic_wheel_fields_rejects_dynamic_version(tmp_path: Path) -> None:
+    plugin_dir = tmp_path / "plugins"
+    plugin_dir.mkdir()
+    (plugin_dir / "wheel_ver.py").write_text(
+        "def dynamic_wheel(settings):\n"
+        "    return {'version': True}\n"
+        "def dynamic_metadata(settings, project):\n"
+        "    return {'version': '1.0'}\n"
+    )
+
+    with pytest.raises(ValueError, match="'version' may never"):
+        dynamic_metadata.loader.dynamic_wheel_fields(
+            [{"provider": {"path": str(plugin_dir), "module": "wheel_ver"}}]
+        )
 
 
 def test_load_dynamic_metadata_requires_provider_key() -> None:
