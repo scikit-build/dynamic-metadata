@@ -15,6 +15,7 @@ plugins
 plugin_authors
 backend_authors
 backend_authors_reimplement
+migration
 ```
 
 ```{toctree}
