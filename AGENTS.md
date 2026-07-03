@@ -114,6 +114,15 @@ encouraged to reuse or vendor.
   `__version__`/`VERSION`).
 - `template.py` — `str.format` substitution using `{project[...]}`,
   demonstrating cross-field references (reading earlier entries' results).
+- `static.py` — settings returned verbatim as fields (gives a later entry a
+  dynamic value to transform).
+- `substitute.py` — regex substitution on a scalar field produced by an earlier
+  entry.
+- `readme_fragment.py` — build `readme` from ordered fragments, one per entry.
+- `pin_installed.py` — pin `dependencies` to build-environment versions via
+  templates like `"torch==x.x.*"` (`x` = installed release component, `x+N`,
+  trailing `*`); implements `dynamic_wheel` (dependencies are Dynamic in the
+  SDist) and `get_requires_for_dynamic_metadata` (the bare names).
 
 ### Schema — `schema.py` + `resources/toml_schema.json`
 

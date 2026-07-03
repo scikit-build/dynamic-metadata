@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.metadata
 import json
 from importlib.metadata import EntryPoint
 from pathlib import Path
@@ -1413,6 +1414,229 @@ def test_unknown_provider_suggests(monkeypatch: pytest.MonkeyPatch) -> None:
 
     with pytest.raises(ModuleNotFoundError, match="did you mean 'regex'"):
         dynamic_metadata.loader.load_provider("regx")
+
+
+def _fake_versions(**versions: str) -> Callable[[str], str]:
+    """Stand in for importlib.metadata.version with a fixed environment."""
+
+    def version(name: str) -> str:
+        try:
+            return versions[name]
+        except KeyError:
+            raise importlib.metadata.PackageNotFoundError(name) from None
+
+    return version
+
+
+def test_pin_installed_wildcard(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The classic torch pin: match the installed major.minor, any patch. The
+    # local version segment (+cu126) is ignored for substitution.
+    monkeypatch.setattr(
+        importlib.metadata, "version", _fake_versions(torch="2.7.1+cu126")
+    )
+
+    pyproject = dynamic_metadata.loader.process_dynamic_metadata(
+        {"name": "test", "dynamic": ["dependencies"]},
+        [
+            {
+                "provider": "dynamic_metadata.pin_installed",
+                "packages": ["torch==x.x.*"],
+            }
+        ],
+        "wheel",
+    )
+
+    assert pyproject["dependencies"] == ["torch==2.7.*"]
+    assert pyproject["dynamic"] == []
+
+
+def test_pin_installed_range_with_cap(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The numpy ABI recommendation: at least the build version, below the next
+    # major. x+1 adds to the substituted component.
+    monkeypatch.setattr(importlib.metadata, "version", _fake_versions(numpy="1.26.4"))
+
+    pyproject = dynamic_metadata.loader.process_dynamic_metadata(
+        {"name": "test", "dynamic": ["dependencies"]},
+        [
+            {
+                "provider": "dynamic_metadata.pin_installed",
+                "packages": ["numpy>=x.x.x,<x+1"],
+            }
+        ],
+        "wheel",
+    )
+
+    assert pyproject["dependencies"] == ["numpy>=1.26.4,<2"]
+
+
+def test_pin_installed_multiple_and_static_merge(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Pins keep the packages order and append to static dependencies (PEP 808).
+    monkeypatch.setattr(
+        importlib.metadata,
+        "version",
+        _fake_versions(torch="2.7.1", numpy="1.26.4"),
+    )
+
+    pyproject = dynamic_metadata.loader.process_dynamic_metadata(
+        {
+            "name": "test",
+            "dependencies": ["packaging"],
+            "dynamic": ["dependencies"],
+        },
+        [
+            {
+                "provider": "dynamic_metadata.pin_installed",
+                "packages": ["torch==x.x.*", "numpy~=x.x"],
+            }
+        ],
+        "wheel",
+    )
+
+    assert pyproject["dependencies"] == ["packaging", "torch==2.7.*", "numpy~=1.26"]
+
+
+def test_pin_installed_odd_versions(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A short release pads missing components with 0; epoch and pre-release
+    # suffixes are dropped; literal components pass through.
+    monkeypatch.setattr(
+        importlib.metadata,
+        "version",
+        _fake_versions(short="2.0", fancy="1!3.4.0rc1"),
+    )
+
+    pyproject = dynamic_metadata.loader.process_dynamic_metadata(
+        {"name": "test", "dynamic": ["dependencies"]},
+        [
+            {
+                "provider": "dynamic_metadata.pin_installed",
+                "packages": ["short==x.x.x", "fancy>=x.x.0,<x+1"],
+            }
+        ],
+        "wheel",
+    )
+
+    assert pyproject["dependencies"] == ["short==2.0.0", "fancy>=3.4.0,<4"]
+
+
+def test_pin_installed_not_installed(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(importlib.metadata, "version", _fake_versions())
+
+    with pytest.raises(RuntimeError, match="'torch' is not installed"):
+        dynamic_metadata.loader.process_dynamic_metadata(
+            {"name": "test", "dynamic": ["dependencies"]},
+            [
+                {
+                    "provider": "dynamic_metadata.pin_installed",
+                    "packages": ["torch==x.x.*"],
+                }
+            ],
+            "wheel",
+        )
+
+
+def test_pin_installed_real_package() -> None:
+    # One un-mocked run against a distribution guaranteed to be installed.
+    major = importlib.metadata.version("pytest").split(".")[0]
+
+    pyproject = dynamic_metadata.loader.process_dynamic_metadata(
+        {"name": "test", "dynamic": ["dependencies"]},
+        [
+            {
+                "provider": "dynamic_metadata.pin_installed",
+                "packages": ["pytest==x.*"],
+            }
+        ],
+        "wheel",
+    )
+
+    assert pyproject["dependencies"] == [f"pytest=={major}.*"]
+
+
+@pytest.mark.parametrize(
+    ("package", "match"),
+    [
+        pytest.param("torch", "must include a specifier", id="no-specifier"),
+        pytest.param("==x.x", "Invalid package template", id="no-name"),
+        pytest.param("torch=x.x", "Invalid specifier", id="single-equals"),
+        pytest.param("torch==x.*.x", "must be the last component", id="wildcard-mid"),
+        pytest.param("torch>=x.*", "requires the '==' or '!='", id="wildcard-range"),
+        pytest.param("torch==x.y", "Invalid version component", id="bad-component"),
+    ],
+)
+def test_pin_installed_rejects_bad_template(
+    monkeypatch: pytest.MonkeyPatch, package: str, match: str
+) -> None:
+    monkeypatch.setattr(importlib.metadata, "version", _fake_versions(torch="2.7.1"))
+
+    with pytest.raises(RuntimeError, match=match):
+        dynamic_metadata.loader.process_dynamic_metadata(
+            {"name": "test", "dynamic": ["dependencies"]},
+            [
+                {
+                    "provider": "dynamic_metadata.pin_installed",
+                    "packages": [package],
+                }
+            ],
+            "wheel",
+        )
+
+
+@pytest.mark.parametrize(
+    ("settings", "match"),
+    [
+        pytest.param({}, "Must contain the 'packages'", id="missing"),
+        pytest.param(
+            {"packages": "torch==x.x.*"}, "must be a list of strings", id="not-list"
+        ),
+        pytest.param({"packages": [42]}, "must be a list of strings", id="not-str"),
+        pytest.param(
+            {"packages": [], "typo": "oops"}, "settings allowed", id="unknown-setting"
+        ),
+    ],
+)
+def test_pin_installed_rejects_bad_settings(
+    settings: dict[str, Any], match: str
+) -> None:
+    with pytest.raises(RuntimeError, match=match):
+        dynamic_metadata.loader.process_dynamic_metadata(
+            {"name": "test", "dynamic": ["dependencies"]},
+            [{"provider": "dynamic_metadata.pin_installed", **settings}],
+            "wheel",
+        )
+
+
+def test_pin_installed_dynamic_wheel() -> None:
+    # Pinned dependencies differ per build environment, so the SDist marks them
+    # Dynamic (METADATA 2.2); with nothing to pin, nothing is dynamic.
+    fields = dynamic_metadata.loader.dynamic_wheel_fields(
+        [
+            {
+                "provider": "dynamic_metadata.pin_installed",
+                "packages": ["torch==x.x.*"],
+            }
+        ]
+    )
+    assert fields == {"dependencies"}
+
+    fields = dynamic_metadata.loader.dynamic_wheel_fields(
+        [{"provider": "dynamic_metadata.pin_installed", "packages": []}]
+    )
+    assert fields == set()
+
+
+def test_pin_installed_get_requires() -> None:
+    # The bare names are requested so the packages exist to be inspected.
+    requires = dynamic_metadata.loader.get_requires_for_dynamic_metadata(
+        [
+            {
+                "provider": "dynamic_metadata.pin_installed",
+                "packages": ["torch==x.x.*", "numpy>=x.x.x,<x+1"],
+            }
+        ]
+    )
+    assert requires == ["torch", "numpy"]
 
 
 def test_list_providers_includes_bundled() -> None:
