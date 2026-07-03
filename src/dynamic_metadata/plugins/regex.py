@@ -5,7 +5,7 @@ import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from . import _process_dynamic_metadata, _require_field
+from . import _process_dynamic_metadata, _require_field, _require_str_settings
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -39,10 +39,7 @@ def dynamic_metadata(
     if field != "version" and "regex" not in settings:
         msg = "Must contain the 'regex' setting if not getting version"
         raise RuntimeError(msg)
-    for key in KEYS:
-        if key in settings and not isinstance(settings[key], str):
-            msg = f"Setting {key!r} must be a string"
-            raise RuntimeError(msg)
+    _require_str_settings(settings, KEYS)
 
     input_filename = settings["input"]
     regex = settings.get(

@@ -51,6 +51,7 @@ Changelog = "https://github.com/scikit-build/dynamic-metadata/releases"
 dynamic-metadata = "dynamic_metadata.schema:get_schema"
 
 [project.entry-points."dynamic_metadata.provider"]
+"dynamic_metadata.ast" = "dynamic_metadata.plugins.ast"
 "dynamic_metadata.regex" = "dynamic_metadata.plugins.regex"
 "dynamic_metadata.template" = "dynamic_metadata.plugins.template"
 "dynamic_metadata.substitute" = "dynamic_metadata.plugins.substitute"

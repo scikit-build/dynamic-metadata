@@ -1,8 +1,8 @@
 # Bundled plugins
 
-This package ships six plugins. `regex`, `template`, and `substitute` are
-generic — they read their target from a `field` setting. `static` writes values
-straight from its settings; `readme_fragment` and `pin_installed` are
+This package ships seven plugins. `ast`, `regex`, `template`, and `substitute`
+are generic — they read their target from a `field` setting. `static` writes
+values straight from its settings; `readme_fragment` and `pin_installed` are
 single-purpose and always write `readme` and `dependencies` respectively.
 Because they live inside `dynamic-metadata`, you must add `dynamic-metadata` to
 your `[build-system].requires` to use them.
@@ -47,6 +47,43 @@ Settings (all values must be strings):
 The search runs in `re.MULTILINE` mode. When the target `field` is not a string
 field, `result` is applied across the container shape the field requires (each
 string in a list, each value in a table, and so on).
+
+## `ast`
+
+`dynamic_metadata.plugins.ast` reads the literal value assigned to a
+module-level global in a Python file. The file is parsed with {mod}`ast`, never
+imported, so it works without the package (or its dependencies) being importable
+in the build environment.
+
+```toml
+[project]
+dynamic = ["version"]
+
+[[tool.dynamic-metadata]]
+provider = "dynamic_metadata.ast"
+field = "version"
+input = "src/my_package/__init__.py"
+name = "__version__"
+```
+
+Settings (all values must be strings):
+
+| Setting | Required | Description                |
+| ------- | -------- | -------------------------- |
+| `field` | yes      | The metadata field to set. |
+| `input` | yes      | The Python file to parse.  |
+| `name`  | yes      | The global to read.        |
+
+Only assignments at module scope are considered (including annotated ones like
+`__version__: str = "1.2.3"`); if the name is assigned more than once, the last
+assignment wins, as it would when executing the file. The value must be a
+literal accepted by {func}`ast.literal_eval` — a call like `get_version()` is an
+error.
+
+Unlike `regex`, which always extracts a string, the value keeps its Python
+shape, so a list or table field can be filled directly — for example
+`field = "keywords"` from `KEYWORDS = ["science", "build"]`. Tuples are
+converted to lists. The shape must match what the field requires.
 
 ## `template`
 

@@ -110,6 +110,9 @@ encouraged to reuse or vendor.
 
 ### Bundled plugins — `plugins/`
 
+- `ast.py` — read the literal value of a module-level global (`name`) from a
+  Python file via `ast.literal_eval`, without importing it; values keep their
+  Python shape, so list/table fields can be filled directly.
 - `regex.py` — extract a value from a file via regex (default targets
   `__version__`/`VERSION`).
 - `template.py` — `str.format` substitution using `{project[...]}`,

@@ -30,6 +30,14 @@ def _require_field(settings: Mapping[str, typing.Any], allowed: set[str]) -> str
     return field
 
 
+def _require_str_settings(settings: Mapping[str, typing.Any], keys: set[str]) -> None:
+    """Reject any of ``keys`` present in ``settings`` with a non-string value."""
+    for key in keys:
+        if key in settings and not isinstance(settings[key], str):
+            msg = f"Setting {key!r} must be a string"
+            raise RuntimeError(msg)
+
+
 def _process_dynamic_metadata(field: str, action: Callable[[str], str], result: T) -> T:
     """
     Helper function for processing an action on the various possible metadata fields.
