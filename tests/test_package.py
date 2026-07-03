@@ -1751,6 +1751,191 @@ def test_pin_installed_get_requires() -> None:
     assert requires == ["torch", "numpy"]
 
 
+def test_from_file_dependencies(tmp_path: Path) -> None:
+    # requirements.txt conventions: comments, blank lines, and backslash
+    # continuations are handled; the result appends to static dependencies.
+    reqs = tmp_path / "requirements.txt"
+    reqs.write_text(
+        "# a full-line comment\n"
+        "numpy>=1.26  # a trailing comment\n"
+        "rich\\\n"
+        ">=13\n"
+        "\n"
+        'typing-extensions; python_version<"3.11"\n'
+    )
+    pyproject = dynamic_metadata.loader.process_dynamic_metadata(
+        {
+            "name": "test",
+            "version": "0.1.0",
+            "dependencies": ["packaging"],
+            "dynamic": ["dependencies"],
+        },
+        [
+            {
+                "provider": "dynamic_metadata.from_file",
+                "field": "dependencies",
+                "path": str(reqs),
+            },
+        ],
+        "wheel",
+    )
+
+    assert pyproject["dependencies"] == [
+        "packaging",
+        "numpy>=1.26",
+        "rich>=13",
+        'typing-extensions; python_version<"3.11"',
+    ]
+    assert "dependencies" not in pyproject["dynamic"]
+
+
+def test_from_file_optional_dependencies(tmp_path: Path) -> None:
+    # One entry per extra; entries for the same extra append.
+    (tmp_path / "requirements-test.txt").write_text("pytest>=7\n")
+    (tmp_path / "requirements-docs.txt").write_text("sphinx\nfuro\n")
+    (tmp_path / "requirements-test-extra.txt").write_text("pytest-cov\n")
+    pyproject = dynamic_metadata.loader.process_dynamic_metadata(
+        {"name": "test", "version": "0.1.0", "dynamic": ["optional-dependencies"]},
+        [
+            {
+                "provider": "dynamic_metadata.from_file",
+                "field": "optional-dependencies.test",
+                "path": str(tmp_path / "requirements-test.txt"),
+            },
+            {
+                "provider": "dynamic_metadata.from_file",
+                "field": "optional-dependencies.docs",
+                "path": str(tmp_path / "requirements-docs.txt"),
+            },
+            {
+                "provider": "dynamic_metadata.from_file",
+                "field": "optional-dependencies.test",
+                "path": str(tmp_path / "requirements-test-extra.txt"),
+            },
+        ],
+        "wheel",
+    )
+
+    assert pyproject["optional-dependencies"] == {
+        "test": ["pytest>=7", "pytest-cov"],
+        "docs": ["sphinx", "furo"],
+    }
+
+
+def test_from_file_string_field(tmp_path: Path) -> None:
+    # A string field takes the whole file, stripped: the classic VERSION file.
+    (tmp_path / "VERSION").write_text("1.2.3\n")
+    pyproject = dynamic_metadata.loader.process_dynamic_metadata(
+        {"name": "test", "dynamic": ["version"]},
+        [
+            {
+                "provider": "dynamic_metadata.from_file",
+                "field": "version",
+                "path": str(tmp_path / "VERSION"),
+            },
+        ],
+        "wheel",
+    )
+
+    assert pyproject["version"] == "1.2.3"
+
+
+def test_from_file_url_key(tmp_path: Path) -> None:
+    # A dict-of-strings field takes a dotted key with the stripped contents.
+    (tmp_path / "homepage.txt").write_text("https://example.com\n")
+    pyproject = dynamic_metadata.loader.process_dynamic_metadata(
+        {"name": "test", "version": "0.1.0", "dynamic": ["urls"]},
+        [
+            {
+                "provider": "dynamic_metadata.from_file",
+                "field": "urls.Homepage",
+                "path": str(tmp_path / "homepage.txt"),
+            },
+        ],
+        "wheel",
+    )
+
+    assert pyproject["urls"] == {"Homepage": "https://example.com"}
+
+
+@pytest.mark.parametrize("line", ["-r base.txt", "--index-url https://x", "-e ."])
+def test_from_file_rejects_option_lines(tmp_path: Path, line: str) -> None:
+    reqs = tmp_path / "requirements.txt"
+    reqs.write_text(f"{line}\npytest\n")
+    with pytest.raises(RuntimeError, match="Option line"):
+        dynamic_metadata.loader.process_dynamic_metadata(
+            {"name": "test", "version": "0.1.0", "dynamic": ["dependencies"]},
+            [
+                {
+                    "provider": "dynamic_metadata.from_file",
+                    "field": "dependencies",
+                    "path": str(reqs),
+                },
+            ],
+            "wheel",
+        )
+
+
+@pytest.mark.parametrize(
+    ("settings", "match"),
+    [
+        pytest.param(
+            {"field": "readme", "path": "x.md"},
+            "readme_fragment",
+            id="readme",
+        ),
+        pytest.param(
+            {"field": "optional-dependencies", "path": "x.txt"},
+            "requires a key",
+            id="table-without-key",
+        ),
+        pytest.param(
+            {"field": "urls", "path": "x.txt"},
+            "requires a key",
+            id="urls-without-key",
+        ),
+        pytest.param(
+            {"field": "dependencies.test", "path": "x.txt"},
+            "does not take a dotted key",
+            id="dotted-list-field",
+        ),
+        pytest.param(
+            {"field": "authors", "path": "x.txt"},
+            "cannot be read from a file",
+            id="unsupported-field",
+        ),
+        pytest.param(
+            {"field": "dependencies"},
+            "'path' setting",
+            id="missing-path",
+        ),
+        pytest.param(
+            {"field": "dependencies", "path": 3},
+            "must be a string",
+            id="non-string-path",
+        ),
+        pytest.param(
+            {"field": "dependencies", "path": "x.txt", "typo": "oops"},
+            "settings allowed",
+            id="unknown-setting",
+        ),
+    ],
+)
+def test_from_file_rejects_bad_settings(settings: dict[str, Any], match: str) -> None:
+    # Settings and field shapes are validated before the file is read, so none
+    # of these need the file to exist.
+    with pytest.raises(RuntimeError, match=match):
+        dynamic_metadata.loader.process_dynamic_metadata(
+            {
+                "name": "test",
+                "version": "0.1.0",
+                "dynamic": ["dependencies", "optional-dependencies", "urls"],
+            },
+            [{"provider": "dynamic_metadata.from_file", **settings}],
+            "wheel",
+        )
+
+
 def test_list_providers_includes_bundled() -> None:
     providers = dynamic_metadata.discovery.list_providers()
     assert "dynamic_metadata.regex" in providers

@@ -122,6 +122,10 @@ encouraged to reuse or vendor.
 - `substitute.py` — regex substitution on a scalar field produced by an earlier
   entry.
 - `readme_fragment.py` — build `readme` from ordered fragments, one per entry.
+- `from_file.py` — fill a field from a file: stripped contents for a string
+  field, requirements.txt-style lines for a list field; a table field names its
+  key after a dot (`optional-dependencies.test`), one entry per key. pip option
+  lines (`-r`, ...) are a hard error — combine files with one entry per file.
 - `pin_installed.py` — pin `dependencies` to build-environment versions via
   templates like `"torch==x.x.*"` (`x` = installed release component, `x+N`,
   trailing `*`); implements `dynamic_wheel` (dependencies are Dynamic in the
