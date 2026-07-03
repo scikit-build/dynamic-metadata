@@ -1,10 +1,11 @@
 # Bundled plugins
 
-This package ships five plugins. `regex`, `template`, and `substitute` are
+This package ships six plugins. `regex`, `template`, and `substitute` are
 generic — they read their target from a `field` setting. `static` writes values
-straight from its settings, and `readme_fragment` is single-purpose and always
-writes `readme`. Because they live inside `dynamic-metadata`, you must add
-`dynamic-metadata` to your `[build-system].requires` to use them.
+straight from its settings; `readme_fragment` and `pin_installed` are
+single-purpose and always write `readme` and `dependencies` respectively.
+Because they live inside `dynamic-metadata`, you must add `dynamic-metadata` to
+your `[build-system].requires` to use them.
 
 Each registers a provider name of `dynamic_metadata.` plus the heading below, so
 the `regex` plugin is `provider = "dynamic_metadata.regex"`. The examples use
@@ -156,6 +157,56 @@ Settings (all values are strings):
 
 Slicing is applied in order: start, then end, then `pattern`. A missing marker
 or a non-matching `pattern` raises a `RuntimeError`.
+
+## `pin_installed`
+
+`dynamic_metadata.plugins.pin_installed` pins runtime dependencies to the
+version of a package installed in the build environment. This is the classic
+compiled-extension workflow: a wheel built against the pytorch (or historically
+numpy) ABI must require a matching version at runtime, and that version is only
+known when the wheel is built.
+
+```toml
+[project]
+dynamic = ["dependencies"]
+
+[[tool.dynamic-metadata]]
+provider = "dynamic_metadata.pin_installed"
+packages = ["torch==x.x.*"]
+```
+
+Settings:
+
+| Setting    | Required | Description                                                              |
+| ---------- | -------- | ------------------------------------------------------------------------ |
+| `packages` | yes      | A list of requirement templates, resolved against the build environment. |
+
+Each template is a distribution name followed by a specifier set whose version
+components are, dot-separated:
+
+- `x` — the corresponding release component of the installed version (`0` if the
+  release is shorter). Epoch, pre/post/dev markers, and local version segments
+  (`+cu126`) are ignored.
+- `x+N` — that component plus `N`, for an upper bound like `<x+1`.
+- `*` — a literal PEP 440 wildcard; only valid as the last component with `==`
+  or `!=`.
+- a literal number, passed through.
+
+With torch 2.7.1 installed, `"torch==x.x.*"` resolves to `torch==2.7.*`, and
+`"numpy>=x.x.x,<x+1"` with numpy 1.26.4 resolves to `numpy>=1.26.4,<2` (the
+numpy ABI recommendation). The resolved requirements are appended to any static
+`dependencies` (PEP 808).
+
+The plugin implements both optional collection hooks:
+
+- `get_requires_for_dynamic_metadata` requests the bare names, so the packages
+  are present to be inspected. Constrain which version is used for the _build_
+  in `[build-system].requires` (or by pre-installing with
+  `--no-build-isolation`); the plugin pins the _runtime_ requirement to whatever
+  was resolved.
+- `dynamic_wheel` reports `dependencies` as dynamic, so an SDist's `PKG-INFO`
+  marks `Requires-Dist` as `Dynamic` (METADATA 2.2) — the pins legitimately
+  differ per build environment, so installers must not trust the SDist's value.
 
 ## `substitute`
 
