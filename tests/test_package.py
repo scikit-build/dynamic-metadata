@@ -1936,6 +1936,342 @@ def test_from_file_rejects_bad_settings(settings: dict[str, Any], match: str) ->
         )
 
 
+def test_from_data_toml_scalar(tmp_path: Path) -> None:
+    # A version out of a pyproject.toml-shaped file via a dotted key.
+    (tmp_path / "data.toml").write_text('[project]\nversion = "1.2.3"\n')
+    pyproject = dynamic_metadata.loader.process_dynamic_metadata(
+        {"name": "test", "dynamic": ["version"]},
+        [
+            {
+                "provider": "dynamic_metadata.from_data",
+                "field": "version",
+                "path": str(tmp_path / "data.toml"),
+                "key": "project.version",
+            },
+        ],
+        "wheel",
+    )
+
+    assert pyproject["version"] == "1.2.3"
+    assert pyproject["dynamic"] == []
+
+
+def test_from_data_json_scalar(tmp_path: Path) -> None:
+    (tmp_path / "data.json").write_text('{"package": {"version": "4.5.6"}}')
+    pyproject = dynamic_metadata.loader.process_dynamic_metadata(
+        {"name": "test", "dynamic": ["version"]},
+        [
+            {
+                "provider": "dynamic_metadata.from_data",
+                "field": "version",
+                "path": str(tmp_path / "data.json"),
+                "key": "package.version",
+            },
+        ],
+        "wheel",
+    )
+
+    assert pyproject["version"] == "4.5.6"
+
+
+def test_from_data_list_field(tmp_path: Path) -> None:
+    # A list value keeps its shape and fills a list field directly.
+    (tmp_path / "data.toml").write_text('[tool]\nkeywords = ["science", "build"]\n')
+    pyproject = dynamic_metadata.loader.process_dynamic_metadata(
+        {"name": "test", "version": "0.1.0", "dynamic": ["keywords"]},
+        [
+            {
+                "provider": "dynamic_metadata.from_data",
+                "field": "keywords",
+                "path": str(tmp_path / "data.toml"),
+                "key": "tool.keywords",
+            },
+        ],
+        "wheel",
+    )
+
+    assert pyproject["keywords"] == ["science", "build"]
+
+
+def test_from_data_table_field_whole(tmp_path: Path) -> None:
+    # A table value fills the whole field directly, like the ast plugin.
+    (tmp_path / "data.json").write_text('{"urls": {"Home": "h", "Docs": "d"}}')
+    pyproject = dynamic_metadata.loader.process_dynamic_metadata(
+        {"name": "test", "version": "0.1.0", "dynamic": ["urls"]},
+        [
+            {
+                "provider": "dynamic_metadata.from_data",
+                "field": "urls",
+                "path": str(tmp_path / "data.json"),
+                "key": "urls",
+            },
+        ],
+        "wheel",
+    )
+
+    assert pyproject["urls"] == {"Home": "h", "Docs": "d"}
+
+
+def test_from_data_dotted_field_optional_dependencies(tmp_path: Path) -> None:
+    # A dotted field names one extra; the value is a list of requirements.
+    (tmp_path / "data.toml").write_text(
+        '[groups]\ntest = ["pytest>=7", "pytest-cov"]\n'
+    )
+    pyproject = dynamic_metadata.loader.process_dynamic_metadata(
+        {"name": "test", "version": "0.1.0", "dynamic": ["optional-dependencies"]},
+        [
+            {
+                "provider": "dynamic_metadata.from_data",
+                "field": "optional-dependencies.test",
+                "path": str(tmp_path / "data.toml"),
+                "key": "groups.test",
+            },
+        ],
+        "wheel",
+    )
+
+    assert pyproject["optional-dependencies"] == {"test": ["pytest>=7", "pytest-cov"]}
+
+
+def test_from_data_dotted_field_url_key(tmp_path: Path) -> None:
+    # A dotted key on a dict-of-strings field takes a single string value.
+    (tmp_path / "data.json").write_text('{"meta": {"home": "https://example.com"}}')
+    pyproject = dynamic_metadata.loader.process_dynamic_metadata(
+        {"name": "test", "version": "0.1.0", "dynamic": ["urls"]},
+        [
+            {
+                "provider": "dynamic_metadata.from_data",
+                "field": "urls.Homepage",
+                "path": str(tmp_path / "data.json"),
+                "key": "meta.home",
+            },
+        ],
+        "wheel",
+    )
+
+    assert pyproject["urls"] == {"Homepage": "https://example.com"}
+
+
+def test_from_data_missing_key_segment(tmp_path: Path) -> None:
+    (tmp_path / "data.toml").write_text('[project]\nname = "x"\n')
+    with pytest.raises(RuntimeError, match="Key segment 'version' not found"):
+        dynamic_metadata.loader.process_dynamic_metadata(
+            {"name": "test", "dynamic": ["version"]},
+            [
+                {
+                    "provider": "dynamic_metadata.from_data",
+                    "field": "version",
+                    "path": str(tmp_path / "data.toml"),
+                    "key": "project.version",
+                },
+            ],
+            "wheel",
+        )
+
+
+def test_from_data_key_descends_into_scalar(tmp_path: Path) -> None:
+    # Traversing past a non-table value names the failing segment.
+    (tmp_path / "data.json").write_text('{"project": {"version": "1.0"}}')
+    with pytest.raises(RuntimeError, match="Cannot read key segment 'extra'"):
+        dynamic_metadata.loader.process_dynamic_metadata(
+            {"name": "test", "dynamic": ["version"]},
+            [
+                {
+                    "provider": "dynamic_metadata.from_data",
+                    "field": "version",
+                    "path": str(tmp_path / "data.json"),
+                    "key": "project.version.extra",
+                },
+            ],
+            "wheel",
+        )
+
+
+def test_from_data_unknown_extension(tmp_path: Path) -> None:
+    (tmp_path / "data.yaml").write_text("version: 1.0\n")
+    with pytest.raises(RuntimeError, match="Unsupported data file extension"):
+        dynamic_metadata.loader.process_dynamic_metadata(
+            {"name": "test", "dynamic": ["version"]},
+            [
+                {
+                    "provider": "dynamic_metadata.from_data",
+                    "field": "version",
+                    "path": str(tmp_path / "data.yaml"),
+                    "key": "version",
+                },
+            ],
+            "wheel",
+        )
+
+
+def test_from_data_shape_mismatch(tmp_path: Path) -> None:
+    # A string value cannot fill a list field.
+    (tmp_path / "data.toml").write_text('[project]\nversion = "1.0"\n')
+    with pytest.raises(RuntimeError, match="must be a list of strings"):
+        dynamic_metadata.loader.process_dynamic_metadata(
+            {"name": "test", "version": "0.1.0", "dynamic": ["keywords"]},
+            [
+                {
+                    "provider": "dynamic_metadata.from_data",
+                    "field": "keywords",
+                    "path": str(tmp_path / "data.toml"),
+                    "key": "project.version",
+                },
+            ],
+            "wheel",
+        )
+
+
+def _from_data_states_entry(path: str) -> dict[str, Any]:
+    return {
+        "provider": "dynamic_metadata.from_data",
+        "field": "description",
+        "path": path,
+        "key": "meta.summary",
+        "states": ["wheel", "sdist"],
+    }
+
+
+def test_from_data_states_active(tmp_path: Path) -> None:
+    # In a listed state the entry resolves the field normally.
+    (tmp_path / "data.toml").write_text('[meta]\nsummary = "hello"\n')
+    pyproject = dynamic_metadata.loader.process_dynamic_metadata(
+        {"name": "test", "version": "0.1.0", "dynamic": ["description"]},
+        [_from_data_states_entry(str(tmp_path / "data.toml"))],
+        "wheel",
+    )
+
+    assert pyproject["description"] == "hello"
+    assert pyproject["dynamic"] == []
+
+
+def test_from_data_states_gated_out(tmp_path: Path) -> None:
+    # Outside the listed states the entry contributes nothing and the field is
+    # left unresolved in project.dynamic.
+    (tmp_path / "data.toml").write_text('[meta]\nsummary = "hello"\n')
+    pyproject = dynamic_metadata.loader.process_dynamic_metadata(
+        {"name": "test", "version": "0.1.0", "dynamic": ["description"]},
+        [_from_data_states_entry(str(tmp_path / "data.toml"))],
+        "metadata_wheel",
+    )
+
+    assert "description" not in pyproject
+    assert pyproject["dynamic"] == ["description"]
+
+
+def test_from_data_no_states_unconditional(tmp_path: Path) -> None:
+    # Without states the field resolves regardless of build state.
+    (tmp_path / "data.toml").write_text('[meta]\nsummary = "hello"\n')
+    pyproject = dynamic_metadata.loader.process_dynamic_metadata(
+        {"name": "test", "version": "0.1.0", "dynamic": ["description"]},
+        [
+            {
+                "provider": "dynamic_metadata.from_data",
+                "field": "description",
+                "path": str(tmp_path / "data.toml"),
+                "key": "meta.summary",
+            }
+        ],
+        "metadata_wheel",
+    )
+
+    assert pyproject["description"] == "hello"
+
+
+def test_from_data_dynamic_wheel_with_states() -> None:
+    # A states-gated field is Dynamic in the SDist (it may differ per build state).
+    fields = dynamic_metadata.loader.dynamic_wheel_fields(
+        [
+            {
+                "provider": "dynamic_metadata.from_data",
+                "field": "optional-dependencies.test",
+                "path": "data.toml",
+                "key": "groups.test",
+                "states": ["wheel"],
+            }
+        ]
+    )
+    assert fields == {"optional-dependencies"}
+
+
+def test_from_data_dynamic_wheel_without_states() -> None:
+    # Without states the file content is identical at both build times.
+    fields = dynamic_metadata.loader.dynamic_wheel_fields(
+        [
+            {
+                "provider": "dynamic_metadata.from_data",
+                "field": "description",
+                "path": "data.toml",
+                "key": "meta.summary",
+            }
+        ]
+    )
+    assert fields == set()
+
+
+def test_from_data_version_with_states_rejected() -> None:
+    # Gating version by state would leave it unresolvable in other states.
+    with pytest.raises(RuntimeError, match="'version' cannot be gated by 'states'"):
+        dynamic_metadata.loader.process_dynamic_metadata(
+            {"name": "test", "dynamic": ["version"]},
+            [
+                {
+                    "provider": "dynamic_metadata.from_data",
+                    "field": "version",
+                    "path": "data.toml",
+                    "key": "project.version",
+                    "states": ["wheel"],
+                }
+            ],
+            "wheel",
+        )
+
+
+@pytest.mark.parametrize(
+    ("settings", "match"),
+    [
+        pytest.param(
+            {"field": "version", "key": "v"}, "'path' setting", id="missing-path"
+        ),
+        pytest.param(
+            {"field": "version", "path": "d.toml"}, "'key' setting", id="missing-key"
+        ),
+        pytest.param(
+            {"field": "version", "path": 3, "key": "v"},
+            "must be a string",
+            id="non-string-path",
+        ),
+        pytest.param(
+            {"field": "dependencies.x", "path": "d.toml", "key": "v"},
+            "does not take a dotted key",
+            id="dotted-list-field",
+        ),
+        pytest.param(
+            {"field": "version", "path": "d.toml", "key": "v", "typo": "x"},
+            "settings allowed",
+            id="unknown-setting",
+        ),
+        pytest.param(
+            {"field": "version", "path": "d.toml", "key": "v", "states": "wheel"},
+            "must be a list of strings",
+            id="states-not-list",
+        ),
+        pytest.param(
+            {"field": "version", "path": "d.toml", "key": "v", "states": ["bdist"]},
+            "Unknown build state",
+            id="states-unknown",
+        ),
+    ],
+)
+def test_from_data_rejects_bad_settings(settings: dict[str, Any], match: str) -> None:
+    with pytest.raises(RuntimeError, match=match):
+        dynamic_metadata.loader.process_dynamic_metadata(
+            {"name": "test", "version": "0.1.0", "dynamic": ["version"]},
+            [{"provider": "dynamic_metadata.from_data", **settings}],
+            "wheel",
+        )
+
+
 def test_list_providers_includes_bundled() -> None:
     providers = dynamic_metadata.discovery.list_providers()
     assert "dynamic_metadata.regex" in providers

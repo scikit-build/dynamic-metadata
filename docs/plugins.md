@@ -1,11 +1,12 @@
 # Bundled plugins
 
-This package ships eight plugins. `ast`, `regex`, `template`, `from_file`, and
-`substitute` are generic — they read their target from a `field` setting.
-`static` writes values straight from its settings; `readme_fragment` and
-`pin_installed` are single-purpose and always write `readme` and `dependencies`
-respectively. Because they live inside `dynamic-metadata`, you must add
-`dynamic-metadata` to your `[build-system].requires` to use them.
+This package ships nine plugins. `ast`, `regex`, `template`, `from_file`,
+`from_data`, and `substitute` are generic — they read their target from a
+`field` setting. `static` writes values straight from its settings;
+`readme_fragment` and `pin_installed` are single-purpose and always write
+`readme` and `dependencies` respectively. Because they live inside
+`dynamic-metadata`, you must add `dynamic-metadata` to your
+`[build-system].requires` to use them.
 
 Each registers a provider name of `dynamic_metadata.` plus the heading below, so
 the `regex` plugin is `provider = "dynamic_metadata.regex"`. The examples use
@@ -158,6 +159,84 @@ the same extra append, and each extra is its own entry.
 Fields whose values aren't flat text — `readme` (use
 [`readme_fragment`](#readme_fragment)), `entry-points`, `authors`, and
 `maintainers` — are rejected.
+
+## `from_data`
+
+`dynamic_metadata.plugins.from_data` reads a value out of a structured data file
+— a `.toml` or `.json` document — at a dotted `key` path. The format is inferred
+from the file extension; any other extension is an error. Like [`ast`](#ast),
+the value keeps its shape, so a list or table field can be filled directly.
+
+```toml
+[project]
+dynamic = ["version"]
+
+[[tool.dynamic-metadata]]
+provider = "dynamic_metadata.from_data"
+field = "version"
+path = "Cargo.toml"
+key = "package.version"
+```
+
+Settings:
+
+| Setting  | Required | Description                                                                                               |
+| -------- | -------- | --------------------------------------------------------------------------------------------------------- |
+| `field`  | yes      | The metadata field to set; a table field may name the key after a dot (`optional-dependencies.test`).     |
+| `path`   | yes      | The data file to read; `.toml` or `.json`, chosen by extension.                                           |
+| `key`    | yes      | A dotted path into the parsed document (`project.version`). Key segments cannot themselves contain a dot. |
+| `states` | no       | A flat list of build states this entry applies to (opt-in; see below).                                    |
+
+`key` walks the parsed table one segment at a time; a missing segment raises an
+error naming the segment that failed. Because segments are split on `.`, a key
+that itself contains a dot cannot be addressed. The extracted value's shape must
+match the target `field` (a string for `version`, a list for `keywords`, a table
+for `urls`), as with `ast`. A table field can also be filled one key at a time
+with a dotted `field` like [`from_file`](#from_file):
+`optional-dependencies.test` expects a list value, and a
+`urls`/`scripts`/`gui-scripts` key expects a string.
+
+### Gating on the build state
+
+`from_data` is the reference example of the optional `build_state` hook. Set
+`states` to a list of
+[build states](plugin_authors.md#receiving-the-build-state) (`sdist`, `wheel`,
+`editable`, `metadata_wheel`, `metadata_editable`) to apply the entry only in
+those states:
+
+```toml
+[project]
+dynamic = ["dependencies"]
+
+# Read the locked, exact dependencies only when building a wheel; the SDist keeps
+# whatever another entry (or [project]) provides.
+[[tool.dynamic-metadata]]
+provider = "dynamic_metadata.from_data"
+field = "optional-dependencies.locked"
+path = "locked.json"
+key = "dependencies.locked"
+states = ["wheel", "editable"]
+```
+
+The semantics:
+
+- When `states` is **absent**, the plugin is unconditional — identical to not
+  having the feature. Nothing changes for anyone not using it.
+- When `states` is **set** and the current build state is **not** listed,
+  `dynamic_metadata` returns nothing. The field is **not** resolved, so it stays
+  in `project.dynamic`. Pair a gated entry with another entry that provides the
+  field in the remaining states, or only gate a field the backend does not
+  require in those states — otherwise the backend sees an unresolved dynamic
+  field and errors.
+- Because a gated field can differ between the SDist build and the wheel build,
+  `dynamic_wheel` reports it as `Dynamic` (METADATA 2.2) when `states` is set;
+  without `states` the file content is the same at both times, so nothing is
+  marked dynamic.
+- `version` may not be combined with `states`: a version must resolve
+  identically in every build state, and gating it would leave it unresolvable
+  elsewhere. This is a hard error.
+
+Unknown state names (and a non-list `states`) are rejected when the entry loads.
 
 ## `static`
 

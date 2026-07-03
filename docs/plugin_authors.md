@@ -70,7 +70,13 @@ the `prepare_metadata_for_build_*` phases). This hook is called once, before
 `dynamic_metadata`. A plugin may use it — for example to reuse a value already
 computed in an SDist's `PKG-INFO` instead of recomputing it for the wheel — by
 stashing it (typically on `self` in a class provider) for `dynamic_metadata` to
-read; a plugin that does not care simply omits this hook.
+read; a plugin that does not care simply omits this hook. The bundled
+[`from_data`](plugins.md#from_data) plugin is a worked example: it stashes the
+state and, when its opt-in `states` setting excludes the current state, returns
+nothing so the field is left for another entry to resolve. A plugin whose value
+can differ between the SDist and the wheel because of the build state should
+also implement [`dynamic_wheel`](#metadata-2-2-dynamic-status) to mark that
+field `Dynamic`.
 
 ### METADATA 2.2 dynamic status
 

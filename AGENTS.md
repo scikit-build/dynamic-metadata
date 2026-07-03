@@ -126,6 +126,12 @@ encouraged to reuse or vendor.
   field, requirements.txt-style lines for a list field; a table field names its
   key after a dot (`optional-dependencies.test`), one entry per key. pip option
   lines (`-r`, ...) are a hard error — combine files with one entry per file.
+- `from_data.py` — fill a field from a `.toml`/`.json` file at a dotted `key`
+  path (format from the extension); values keep their shape like `ast`. A class
+  provider and the reference `build_state` exemplar: the opt-in `states` list
+  gates the entry to those build states (gated out → returns `{}`, field stays
+  in `dynamic`); with `states` set, `dynamic_wheel` marks the field Dynamic;
+  `version` + `states` is a hard error.
 - `pin_installed.py` — pin `dependencies` to build-environment versions via
   templates like `"torch==x.x.*"` (`x` = installed release component, `x+N`,
   trailing `*`); implements `dynamic_wheel` (dependencies are Dynamic in the
