@@ -126,6 +126,11 @@ encouraged to reuse or vendor.
   field, requirements.txt-style lines for a list field; a table field names its
   key after a dot (`optional-dependencies.test`), one entry per key. pip option
   lines (`-r`, ...) are a hard error — combine files with one entry per file.
+- `env.py` — fill a string field from an environment variable (`variable`), with
+  an optional `default`; an unset variable and no default is a hard error.
+  Restricted to `STR_FIELDS` (the value is one string); implements
+  `dynamic_wheel` marking the field Dynamic (env values differ per build),
+  except `version`, which is never dynamic.
 - `pin_installed.py` — pin `dependencies` to build-environment versions via
   templates like `"torch==x.x.*"` (`x` = installed release component, `x+N`,
   trailing `*`); implements `dynamic_wheel` (dependencies are Dynamic in the

@@ -1,7 +1,7 @@
 # Bundled plugins
 
-This package ships eight plugins. `ast`, `regex`, `template`, `from_file`, and
-`substitute` are generic — they read their target from a `field` setting.
+This package ships nine plugins. `ast`, `regex`, `template`, `from_file`, `env`,
+and `substitute` are generic — they read their target from a `field` setting.
 `static` writes values straight from its settings; `readme_fragment` and
 `pin_installed` are single-purpose and always write `readme` and `dependencies`
 respectively. Because they live inside `dynamic-metadata`, you must add
@@ -158,6 +158,40 @@ the same extra append, and each extra is its own entry.
 Fields whose values aren't flat text — `readme` (use
 [`readme_fragment`](#readme_fragment)), `entry-points`, `authors`, and
 `maintainers` — are rejected.
+
+## `env`
+
+`dynamic_metadata.plugins.env` fills a field from an environment variable. This
+suits CI-driven values such as a build number stamped into `version`.
+
+```toml
+[project]
+dynamic = ["version"]
+
+[[tool.dynamic-metadata]]
+provider = "dynamic_metadata.env"
+field = "version"
+variable = "PACKAGE_VERSION"
+default = "0.0.0"
+```
+
+Settings (all values must be strings):
+
+| Setting    | Required | Description                                                                 |
+| ---------- | -------- | --------------------------------------------------------------------------- |
+| `field`    | yes      | The metadata field to set. Must be a string field.                          |
+| `variable` | yes      | The environment variable to read.                                           |
+| `default`  | no       | Used when the variable is unset. Without it, an unset variable is an error. |
+
+Only string fields (`version`, `description`, `requires-python`, `license`) can
+be filled, since the value is a single string. If the variable is unset and no
+`default` is given, the build fails loudly rather than skipping the field.
+
+The plugin implements `dynamic_wheel`, reporting the field as dynamic (METADATA
+2.2) — an environment variable can hold different values when the SDist and the
+wheel are built, so an SDist's `PKG-INFO` marks the field `Dynamic` and
+installers must not trust its value. The one exception is `version`, which may
+never differ between the SDist and a wheel and so is never marked dynamic.
 
 ## `static`
 

@@ -1936,6 +1936,127 @@ def test_from_file_rejects_bad_settings(settings: dict[str, Any], match: str) ->
         )
 
 
+def test_env_string_field(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A string field takes the environment variable's value verbatim.
+    monkeypatch.setenv("PACKAGE_VERSION", "1.2.3")
+    pyproject = dynamic_metadata.loader.process_dynamic_metadata(
+        {"name": "test", "dynamic": ["version"]},
+        [
+            {
+                "provider": "dynamic_metadata.env",
+                "field": "version",
+                "variable": "PACKAGE_VERSION",
+            },
+        ],
+        "wheel",
+    )
+
+    assert pyproject["version"] == "1.2.3"
+    assert "version" not in pyproject["dynamic"]
+
+
+def test_env_default_used_when_unset(monkeypatch: pytest.MonkeyPatch) -> None:
+    # An unset variable falls back to 'default'.
+    monkeypatch.delenv("PACKAGE_VERSION", raising=False)
+    pyproject = dynamic_metadata.loader.process_dynamic_metadata(
+        {"name": "test", "dynamic": ["version"]},
+        [
+            {
+                "provider": "dynamic_metadata.env",
+                "field": "version",
+                "variable": "PACKAGE_VERSION",
+                "default": "0.0.0",
+            },
+        ],
+        "wheel",
+    )
+
+    assert pyproject["version"] == "0.0.0"
+
+
+def test_env_unset_without_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    # An unset variable with no default fails loudly rather than skipping.
+    monkeypatch.delenv("PACKAGE_VERSION", raising=False)
+    with pytest.raises(RuntimeError, match="is not set and no 'default'"):
+        dynamic_metadata.loader.process_dynamic_metadata(
+            {"name": "test", "dynamic": ["version"]},
+            [
+                {
+                    "provider": "dynamic_metadata.env",
+                    "field": "version",
+                    "variable": "PACKAGE_VERSION",
+                },
+            ],
+            "wheel",
+        )
+
+
+@pytest.mark.parametrize(
+    ("settings", "match"),
+    [
+        pytest.param(
+            {"field": "keywords", "variable": "X"},
+            "only string fields",
+            id="list-field",
+        ),
+        pytest.param(
+            {"field": "readme", "variable": "X"},
+            "only string fields",
+            id="readme-field",
+        ),
+        pytest.param(
+            {"field": "version"},
+            "'variable' setting",
+            id="missing-variable",
+        ),
+        pytest.param(
+            {"field": "version", "variable": 3},
+            "must be a string",
+            id="non-string-variable",
+        ),
+        pytest.param(
+            {"field": "version", "variable": "X", "typo": "oops"},
+            "settings allowed",
+            id="unknown-setting",
+        ),
+    ],
+)
+def test_env_rejects_bad_settings(settings: dict[str, Any], match: str) -> None:
+    with pytest.raises(RuntimeError, match=match):
+        dynamic_metadata.loader.process_dynamic_metadata(
+            {"name": "test", "dynamic": ["version", "keywords", "readme"]},
+            [{"provider": "dynamic_metadata.env", **settings}],
+            "wheel",
+        )
+
+
+def test_env_dynamic_wheel(monkeypatch: pytest.MonkeyPatch) -> None:
+    # An env-derived field can differ per build, so it is marked Dynamic — but
+    # version may never differ between the SDist and a wheel.
+    monkeypatch.setenv("DESC", "hello")
+    fields = dynamic_metadata.loader.dynamic_wheel_fields(
+        [
+            {
+                "provider": "dynamic_metadata.env",
+                "field": "description",
+                "variable": "DESC",
+            }
+        ]
+    )
+    assert fields == {"description"}
+
+    fields = dynamic_metadata.loader.dynamic_wheel_fields(
+        [
+            {
+                "provider": "dynamic_metadata.env",
+                "field": "version",
+                "variable": "PACKAGE_VERSION",
+            }
+        ]
+    )
+    assert fields == set()
+
+
 def test_list_providers_includes_bundled() -> None:
     providers = dynamic_metadata.discovery.list_providers()
     assert "dynamic_metadata.regex" in providers
