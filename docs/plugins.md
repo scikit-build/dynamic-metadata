@@ -1,11 +1,11 @@
 # Bundled plugins
 
-This package ships seven plugins. `ast`, `regex`, `template`, and `substitute`
-are generic — they read their target from a `field` setting. `static` writes
-values straight from its settings; `readme_fragment` and `pin_installed` are
-single-purpose and always write `readme` and `dependencies` respectively.
-Because they live inside `dynamic-metadata`, you must add `dynamic-metadata` to
-your `[build-system].requires` to use them.
+This package ships eight plugins. `ast`, `regex`, `template`, `from_file`, and
+`substitute` are generic — they read their target from a `field` setting.
+`static` writes values straight from its settings; `readme_fragment` and
+`pin_installed` are single-purpose and always write `readme` and `dependencies`
+respectively. Because they live inside `dynamic-metadata`, you must add
+`dynamic-metadata` to your `[build-system].requires` to use them.
 
 Each registers a provider name of `dynamic_metadata.` plus the heading below, so
 the `regex` plugin is `provider = "dynamic_metadata.regex"`. The examples use
@@ -106,6 +106,58 @@ Settings:
 
 Only fields produced by earlier entries (or static values already in
 `[project]`) are available — a forward reference raises a `KeyError`.
+
+## `from_file`
+
+`dynamic_metadata.plugins.from_file` fills a field with the contents of a file.
+The file is interpreted by the shape of the target field:
+
+- A **string field** gets the file's contents, stripped of surrounding
+  whitespace — the classic `VERSION` file.
+- A **list field** gets one item per line, requirements.txt-style —
+  `dependencies` from a `requirements.txt`.
+- A **table field** names the key to fill after a dot in `field`, one entry per
+  key: `optional-dependencies.test` fills the `test` extra with one requirement
+  per line, and a `urls`/`scripts`/`gui-scripts` key takes the stripped file
+  contents like a string field.
+
+```toml
+[project]
+dynamic = ["version", "dependencies", "optional-dependencies"]
+
+[[tool.dynamic-metadata]]
+provider = "dynamic_metadata.from_file"
+field = "version"
+path = "VERSION"
+
+[[tool.dynamic-metadata]]
+provider = "dynamic_metadata.from_file"
+field = "dependencies"
+path = "requirements.txt"
+
+[[tool.dynamic-metadata]]
+provider = "dynamic_metadata.from_file"
+field = "optional-dependencies.test"
+path = "requirements-test.txt"
+```
+
+Settings (all values must be strings):
+
+| Setting | Required | Description                                                                                        |
+| ------- | -------- | -------------------------------------------------------------------------------------------------- |
+| `field` | yes      | The metadata field to set; a table field takes the key after a dot (`optional-dependencies.test`). |
+| `path`  | yes      | The file to read (UTF-8).                                                                          |
+
+Line parsing follows the requirements.txt conventions: blank lines and `#`
+comments (at line start or preceded by whitespace) are dropped, and a trailing
+backslash joins a line with the next. pip _options_ (`-r other.txt`, `-e .`,
+`--index-url`) are not requirements and raise an error — to combine several
+files, use one entry per file: list fields append across entries, entries for
+the same extra append, and each extra is its own entry.
+
+Fields whose values aren't flat text — `readme` (use
+[`readme_fragment`](#readme_fragment)), `entry-points`, `authors`, and
+`maintainers` — are rejected.
 
 ## `static`
 

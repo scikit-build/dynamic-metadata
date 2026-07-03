@@ -61,8 +61,8 @@ The documentation is split by audience:
 - **[For users](https://dynamic-metadata.readthedocs.io/en/latest/users.html)**
   — configure plugins in `pyproject.toml`.
 - **[Bundled plugins](https://dynamic-metadata.readthedocs.io/en/latest/plugins.html)**
-  — the plugins shipped with this package (`ast`, `regex`, `template`, `static`,
-  `readme_fragment`, `substitute`, `pin_installed`).
+  — the plugins shipped with this package (`ast`, `regex`, `template`,
+  `from_file`, `static`, `readme_fragment`, `substitute`, `pin_installed`).
 - **[For plugin authors](https://dynamic-metadata.readthedocs.io/en/latest/plugin_authors.html)**
   — implement the hooks; no runtime dependency on this package required.
 - **[For backend authors](https://dynamic-metadata.readthedocs.io/en/latest/backend_authors.html)**
