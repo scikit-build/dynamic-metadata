@@ -319,6 +319,118 @@ def test_regex_rejects_unknown_setting() -> None:
         )
 
 
+def test_ast_version(tmp_path: Path) -> None:
+    (tmp_path / "version.py").write_text('__version__ = "1.2.3"\n')
+
+    pyproject = dynamic_metadata.loader.process_dynamic_metadata(
+        {"name": "test", "dynamic": ["version"]},
+        [
+            {
+                "provider": "dynamic_metadata.ast",
+                "field": "version",
+                "input": str(tmp_path / "version.py"),
+                "name": "__version__",
+            },
+        ],
+        "wheel",
+    )
+
+    assert pyproject["version"] == "1.2.3"
+
+
+def test_ast_last_assignment_wins(tmp_path: Path) -> None:
+    (tmp_path / "version.py").write_text(
+        '__version__: str = "0.1"\n__version__ = "0.2"\n'
+    )
+
+    pyproject = dynamic_metadata.loader.process_dynamic_metadata(
+        {"name": "test", "dynamic": ["version"]},
+        [
+            {
+                "provider": "dynamic_metadata.ast",
+                "field": "version",
+                "input": str(tmp_path / "version.py"),
+                "name": "__version__",
+            },
+        ],
+        "wheel",
+    )
+
+    assert pyproject["version"] == "0.2"
+
+
+def test_ast_list_field_from_tuple(tmp_path: Path) -> None:
+    (tmp_path / "meta.py").write_text('KEYWORDS = ("science", "build")\n')
+
+    pyproject = dynamic_metadata.loader.process_dynamic_metadata(
+        {"name": "test", "version": "0.1.0", "dynamic": ["keywords"]},
+        [
+            {
+                "provider": "dynamic_metadata.ast",
+                "field": "keywords",
+                "input": str(tmp_path / "meta.py"),
+                "name": "KEYWORDS",
+            },
+        ],
+        "wheel",
+    )
+
+    assert pyproject["keywords"] == ["science", "build"]
+
+
+def test_ast_missing_name_raises(tmp_path: Path) -> None:
+    (tmp_path / "version.py").write_text('other = "1.0"\n')
+
+    with pytest.raises(RuntimeError, match="Couldn't find a global assignment"):
+        dynamic_metadata.loader.process_dynamic_metadata(
+            {"name": "test", "dynamic": ["version"]},
+            [
+                {
+                    "provider": "dynamic_metadata.ast",
+                    "field": "version",
+                    "input": str(tmp_path / "version.py"),
+                    "name": "__version__",
+                },
+            ],
+            "wheel",
+        )
+
+
+def test_ast_non_literal_raises(tmp_path: Path) -> None:
+    (tmp_path / "version.py").write_text("__version__ = get_version()\n")
+
+    with pytest.raises(RuntimeError, match="not a literal constant"):
+        dynamic_metadata.loader.process_dynamic_metadata(
+            {"name": "test", "dynamic": ["version"]},
+            [
+                {
+                    "provider": "dynamic_metadata.ast",
+                    "field": "version",
+                    "input": str(tmp_path / "version.py"),
+                    "name": "__version__",
+                },
+            ],
+            "wheel",
+        )
+
+
+def test_ast_requires_name(tmp_path: Path) -> None:
+    (tmp_path / "version.py").write_text('__version__ = "1.2.3"\n')
+
+    with pytest.raises(RuntimeError, match="'name' setting"):
+        dynamic_metadata.loader.process_dynamic_metadata(
+            {"name": "test", "dynamic": ["version"]},
+            [
+                {
+                    "provider": "dynamic_metadata.ast",
+                    "field": "version",
+                    "input": str(tmp_path / "version.py"),
+                },
+            ],
+            "wheel",
+        )
+
+
 def test_build_state_hook_drives_result(tmp_path: Path) -> None:
     # A provider with the optional build_state hook is told the build state
     # before dynamic_metadata, and can drive its result from it: recompute for
