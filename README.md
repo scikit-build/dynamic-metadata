@@ -10,10 +10,6 @@
 
 <!-- SPHINX-START -->
 
-> [!WARNING]
->
-> This is still a WiP! The design may still change.
-
 `dynamic-metadata` defines a plugin protocol that lets a Python build backend
 compute `[project]` fields (version, readme, dependencies, …) at build time.
 Plugins are configured as an **ordered array of tables**,
