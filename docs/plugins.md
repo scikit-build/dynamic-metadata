@@ -20,9 +20,8 @@ fragment or substitution rather than a nested list.
 
 ## `regex`
 
-`dynamic_metadata.regex` extracts a value from a file with a regular
-expression. By default it pulls a version out of a `__version__`/`VERSION`
-assignment.
+`dynamic_metadata.regex` extracts a value from a file with a regular expression.
+By default it pulls a version out of a `__version__`/`VERSION` assignment.
 
 ```toml
 [project]
@@ -50,10 +49,10 @@ string in a list, each value in a table, and so on).
 
 ## `ast`
 
-`dynamic_metadata.ast` reads the literal value assigned to a
-module-level global in a Python file. The file is parsed with {mod}`ast`, never
-imported, so it works without the package (or its dependencies) being importable
-in the build environment.
+`dynamic_metadata.ast` reads the literal value assigned to a module-level global
+in a Python file. The file is parsed with {mod}`ast`, never imported, so it
+works without the package (or its dependencies) being importable in the build
+environment.
 
 ```toml
 [project]
@@ -87,8 +86,8 @@ converted to lists. The shape must match what the field requires.
 
 ## `template`
 
-`dynamic_metadata.template` fills a `str.format` template from fields
-resolved by earlier entries, demonstrating cross-field references.
+`dynamic_metadata.template` fills a `str.format` template from fields resolved
+by earlier entries, demonstrating cross-field references.
 
 ```toml
 [[tool.dynamic-metadata]]
@@ -109,8 +108,8 @@ Only fields produced by earlier entries (or static values already in
 
 ## `from_file`
 
-`dynamic_metadata.from_file` fills a field with the contents of a file.
-The file is interpreted by the shape of the target field:
+`dynamic_metadata.from_file` fills a field with the contents of a file. The file
+is interpreted by the shape of the target field:
 
 - A **string field** gets the file's contents, stripped of surrounding
   whitespace — the classic `VERSION` file.
@@ -161,8 +160,8 @@ Fields whose values aren't flat text — `readme` (use
 
 ## `static`
 
-`dynamic_metadata.static` sets fields directly from its own settings —
-an alternative to writing them in `[project]`. Each setting is a metadata field
+`dynamic_metadata.static` sets fields directly from its own settings — an
+alternative to writing them in `[project]`. Each setting is a metadata field
 mapped to its value, returned verbatim.
 
 ```toml
@@ -204,11 +203,11 @@ It can also keep metadata out of `[project]`, hiding it from tools that read
 
 ## `readme_fragment`
 
-`dynamic_metadata.readme_fragment` builds a `readme` from an ordered
-series of fragments, each its own entry. Every entry appends to the readme
-produced by the entries before it, so a heading, a slice of a file, and a
-changelog excerpt can be stitched together. An entry with `text` is a literal
-fragment; an entry with `path` reads a file and may slice it.
+`dynamic_metadata.readme_fragment` builds a `readme` from an ordered series of
+fragments, each its own entry. Every entry appends to the readme produced by the
+entries before it, so a heading, a slice of a file, and a changelog excerpt can
+be stitched together. An entry with `text` is a literal fragment; an entry with
+`path` reads a file and may slice it.
 
 ```toml
 [project]
@@ -249,8 +248,8 @@ or a non-matching `pattern` raises a `RuntimeError`.
 
 ## `pin_installed`
 
-`dynamic_metadata.pin_installed` pins runtime dependencies to the
-version of a package installed in the build environment. This is the classic
+`dynamic_metadata.pin_installed` pins runtime dependencies to the version of a
+package installed in the build environment. This is the classic
 compiled-extension workflow: a wheel built against the pytorch (or historically
 numpy) ABI must require a matching version at runtime, and that version is only
 known when the wheel is built.
@@ -299,9 +298,9 @@ The plugin implements both optional collection hooks:
 
 ## `substitute`
 
-`dynamic_metadata.substitute` applies a single regex substitution to a
-field already produced by an earlier entry, the way fancy-pypi-readme touches up
-an assembled readme (for example, turning `#123` into a link).
+`dynamic_metadata.substitute` applies a single regex substitution to a field
+already produced by an earlier entry, the way fancy-pypi-readme touches up an
+assembled readme (for example, turning `#123` into a link).
 
 ```toml
 [[tool.dynamic-metadata]]
