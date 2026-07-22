@@ -55,7 +55,7 @@ jobs:
             runs-on: ubuntu-latest
           - python-version: "3.11"
             runs-on: ubuntu-latest
-          - python-version: "3.8"
+          - python-version: "3.9"
             runs-on: ubuntu-latest
           - python-version: "3.14t"
             runs-on: ubuntu-latest

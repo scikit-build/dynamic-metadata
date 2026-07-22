@@ -1,13 +1,8 @@
 from __future__ import annotations
 
 import json
-import sys
+from importlib import resources
 from typing import Any
-
-if sys.version_info < (3, 9):
-    import importlib_resources as resources
-else:
-    from importlib import resources
 
 
 def get_schema() -> dict[str, Any]:
