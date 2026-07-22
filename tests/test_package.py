@@ -209,7 +209,7 @@ def test_provider_sets_multiple_fields(tmp_path: Path) -> None:
     plugin_dir.mkdir()
     (plugin_dir / "multi_prov.py").write_text(
         "def dynamic_metadata(settings, project):\n"
-        "    return {'version': '1.2.3', 'requires-python': '>=3.8'}\n"
+        "    return {'version': '1.2.3', 'requires-python': '>=3.9'}\n"
     )
 
     pyproject = dynamic_metadata.loader.process_dynamic_metadata(
@@ -219,7 +219,7 @@ def test_provider_sets_multiple_fields(tmp_path: Path) -> None:
     )
 
     assert pyproject["version"] == "1.2.3"
-    assert pyproject["requires-python"] == ">=3.8"
+    assert pyproject["requires-python"] == ">=3.9"
     assert pyproject["dynamic"] == []
 
 

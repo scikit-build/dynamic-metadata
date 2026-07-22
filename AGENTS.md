@@ -138,6 +138,6 @@ encouraged to reuse or vendor.
 
 ### Compat
 
-`_compat/tomllib.py` shims `tomllib`/`tomli` (<3.11). `requires-python >=3.8`;
-keep code 3.8-compatible (note `from __future__ import annotations` is required
+`_compat/tomllib.py` shims `tomllib`/`tomli` (<3.11). `requires-python >=3.9`;
+keep code 3.9-compatible (note `from __future__ import annotations` is required
 by ruff isort config in every module).
