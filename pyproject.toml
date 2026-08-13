@@ -73,6 +73,9 @@ git-only = [
   "uv.lock",
 ]
 
+[tool.uv]
+exclude-newer = "7 days"
+
 [dependency-groups]
 test = [
   "pytest >=7",
