@@ -31,7 +31,10 @@ def main_show(args: argparse.Namespace, /) -> None:
     entries = pyproject.get("tool", {}).get("dynamic-metadata", [])
     if entries:
         project = process_dynamic_metadata(
-            project, entries, cast("BuildState", args.state)
+            project,
+            entries,
+            cast("BuildState", args.state),
+            project_dir=Path(args.pyproject_toml).parent,
         )
     print(json.dumps(project, indent=2))
 

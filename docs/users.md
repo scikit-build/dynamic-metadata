@@ -107,8 +107,8 @@ $ dynamic-metadata show
 `show` reads `pyproject.toml` from the current directory, runs the configured
 `[[tool.dynamic-metadata]]` entries in order, and prints the resolved
 `[project]` table as JSON. Use `--pyproject-toml PATH` to point at another file
-and `--state` to choose the build state passed to plugins (default
-`metadata_wheel`).
+(plugins then run from that file's directory) and `--state` to choose the build
+state passed to plugins (default `metadata_wheel`).
 
 `dynamic-metadata providers` lists the provider names registered in your
 environment (the bundled plugins plus any installed third-party plugins) and the

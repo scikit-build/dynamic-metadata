@@ -33,9 +33,11 @@ which build it is taking part in (see
 must be one of the five values above
 (`dynamic_metadata.protocols.BUILD_STATES`).
 
-Run all hooks from the same directory PEP 517 uses (the project root), since
-plugins resolve relative paths like `input = "src/pkg/__init__.py"` against the
-current directory.
+Plugins resolve relative paths like `input = "src/pkg/__init__.py"` (and a local
+provider's `path`) against the current directory, which PEP 517 front ends set
+to the project root. If your backend can run from elsewhere, pass `project_dir=`
+to the loader calls below: the providers are then loaded and their hooks run
+with that directory current.
 
 ## Reading the configuration
 

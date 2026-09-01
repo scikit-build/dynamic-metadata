@@ -2053,3 +2053,78 @@ def test_get_requires_skips_unloadable(tmp_path: Path) -> None:
         dynamic_metadata.loader.get_requires_for_dynamic_metadata(
             [{"provider": {"path": str(tmp_path), "module": "missing_prov"}}]
         )
+
+
+def test_project_dir_resolves_path_and_cwd(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A relative provider path resolves against project_dir, and hooks run
+    # with project_dir as the current directory, so a plugin reading a
+    # relative file works when the backend runs elsewhere.
+    project = tmp_path / "proj"
+    _write_provider(
+        project / "plugins",
+        "cwd_prov",
+        "import os, pathlib\n"
+        "def dynamic_metadata(settings, project):\n"
+        "    return {'version': pathlib.Path('VERSION').read_text().strip(),"
+        " 'description': os.getcwd()}\n"
+        "def dynamic_wheel(settings):\n"
+        "    return {'description': os.getcwd() == os.environ['DM_TEST_PROJ']}\n"
+        "def get_requires_for_dynamic_metadata(settings):\n"
+        "    return [os.getcwd()]\n",
+    )
+    (project / "VERSION").write_text("4.5.6\n")
+    monkeypatch.setenv("DM_TEST_PROJ", str(project.resolve()))
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.chdir(elsewhere)
+    entries = [{"provider": {"path": "plugins", "module": "cwd_prov"}}]
+
+    result = dynamic_metadata.loader.process_dynamic_metadata(
+        {"name": "test", "dynamic": ["version", "description"]},
+        entries,
+        "wheel",
+        project_dir=project,
+    )
+    assert result["version"] == "4.5.6"
+    assert Path(result["description"]) == project.resolve()
+    assert Path.cwd() == elsewhere.resolve()
+
+    assert dynamic_metadata.loader.dynamic_wheel_fields(entries, project) == {
+        "description"
+    }
+    requires = dynamic_metadata.loader.get_requires_for_dynamic_metadata(
+        entries, project
+    )
+    assert [Path(r) for r in requires] == [project.resolve()]
+
+    with pytest.raises(dynamic_metadata.errors.ConfigError, match="existing dir"):
+        dynamic_metadata.loader.process_dynamic_metadata({}, entries, "wheel")
+
+
+def test_cli_show_project_dir(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # `show` resolves relative to the pyproject.toml, not the current directory.
+    (tmp_path / "pyproject.toml").write_text(
+        "[project]\n"
+        'name = "test"\n'
+        'dynamic = ["version"]\n'
+        "\n"
+        "[[tool.dynamic-metadata]]\n"
+        'provider = "dynamic_metadata.regex"\n'
+        'field = "version"\n'
+        'input = "VERSION"\n'
+        'regex = "(?P<value>.+)"\n'
+    )
+    (tmp_path / "VERSION").write_text("3.0")
+    monkeypatch.chdir(tmp_path.parent)
+
+    dynamic_metadata.__main__.main(
+        ["show", "--pyproject-toml", str(tmp_path / "pyproject.toml")]
+    )
+
+    assert json.loads(capsys.readouterr().out)["version"] == "3.0"

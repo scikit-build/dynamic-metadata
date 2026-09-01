@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import contextlib
 import difflib
 import importlib
 import importlib.abc
 import importlib.machinery
 import inspect
+import os
 import sys
 from collections.abc import Mapping, Sequence
 from pathlib import Path
@@ -12,6 +14,7 @@ from types import MappingProxyType
 from typing import (
     TYPE_CHECKING,
     Any,
+    Union,
     cast,
 )
 
@@ -45,6 +48,8 @@ if TYPE_CHECKING:
     from importlib.metadata import EntryPoint
     from types import ModuleType
 
+    StrPath = Union[str, "os.PathLike[str]"]
+
 
 __all__ = [
     "dynamic_wheel_fields",
@@ -63,6 +68,20 @@ def __dir__() -> list[str]:
 # Entry-point group a plugin distribution registers a named provider under. The
 # bundled plugins register here too (see pyproject.toml).
 PROVIDER_GROUP = "dynamic_metadata.provider"
+
+
+@contextlib.contextmanager
+def _working_dir(project_dir: StrPath | None) -> Generator[None, None, None]:
+    """Run with ``project_dir`` as the current directory (no-op for ``None``)."""
+    if project_dir is None:
+        yield
+        return
+    previous = Path.cwd()
+    os.chdir(project_dir)
+    try:
+        yield
+    finally:
+        os.chdir(previous)
 
 
 class _ProviderPathFinder(importlib.abc.MetaPathFinder):
@@ -147,17 +166,20 @@ def _merge_metadata(field: str, static: Any, dynamic: Any) -> Any:
     return merged_groups
 
 
-def _import_provider(module: str, path: str) -> Any:
+def _import_provider(module: str, path: str, project_dir: StrPath | None) -> Any:
     """Import ``module`` (``"pkg.mod"`` or ``"pkg.mod:Class"``) from the ``path`` directory.
 
-    Returns the module, or the named attribute within it, without instantiating.
+    ``path`` is resolved against ``project_dir`` (the current directory if
+    ``None``). Returns the module, or the named attribute within it, without
+    instantiating.
     """
-    if not Path(path).is_dir():
+    directory = Path(project_dir or "") / path
+    if not directory.is_dir():
         msg = f"provider 'path' {path!r} must be an existing directory"
         raise ConfigError(msg)
 
     module_name, _, class_name = module.partition(":")
-    finder = _ProviderPathFinder([path], module_name)
+    finder = _ProviderPathFinder([str(directory)], module_name)
     sys.meta_path.insert(0, finder)
     try:
         imported = importlib.import_module(module_name)
@@ -208,7 +230,9 @@ def _load_entry_point(name: str) -> Any:
         raise ProviderLoadError(msg) from exc
 
 
-def load_provider(provider: object) -> DynamicMetadataProtocol:
+def load_provider(
+    provider: object, project_dir: StrPath | None = None
+) -> DynamicMetadataProtocol:
     """Load a provider from its config value, returning the object whose hooks are called.
 
     ``provider`` is the value of the ``provider`` key in a
@@ -220,7 +244,8 @@ def load_provider(provider: object) -> DynamicMetadataProtocol:
     * an **inline table** ``{path, module}`` — a local plugin imported from the
       ``path`` directory as a module path (``"pkg.mod"`` or ``"pkg.mod:Class"``),
       for a plugin living inside the project being built. Entry points are not
-      consulted.
+      consulted. A relative ``path`` is resolved against ``project_dir`` (the
+      current directory if ``None``).
 
     A bare module is returned as-is (hooks are module-level functions); a class
     is instantiated with no arguments so its hooks are bound methods sharing
@@ -229,7 +254,7 @@ def load_provider(provider: object) -> DynamicMetadataProtocol:
     if isinstance(provider, str):
         obj = _load_entry_point(provider)
     elif isinstance(provider, Mapping) and set(provider) == {"path", "module"}:
-        obj = _import_provider(provider["module"], provider["path"])
+        obj = _import_provider(provider["module"], provider["path"], project_dir)
     else:
         msg = (
             "'provider' must be a registered name (string) or an inline table "
@@ -256,9 +281,8 @@ def _validate_entries(entries: object) -> list[Mapping[str, Any]]:
 def entries_from_pyproject(pyproject: Mapping[str, Any]) -> list[dict[str, Any]]:
     """Return the validated ``[[tool.dynamic-metadata]]`` entries of a parsed ``pyproject.toml``.
 
-    Returns ``[]`` if the table is absent. Raises
-    :class:`~dynamic_metadata.errors.ConfigError` if it is not an array of
-    tables or an entry lacks ``provider``.
+    Returns ``[]`` if the table is absent. Raises :class:`~dynamic_metadata.errors.ConfigError` if it is
+    not an array of tables or an entry lacks ``provider``.
     """
     tool = pyproject.get("tool", {})
     if not isinstance(tool, Mapping):
@@ -271,23 +295,26 @@ def entries_from_pyproject(pyproject: Mapping[str, Any]) -> list[dict[str, Any]]
 
 def load_dynamic_metadata(
     entries: Sequence[Mapping[str, Any]],
+    project_dir: StrPath | None = None,
 ) -> Generator[tuple[DynamicMetadataProtocol, dict[str, Any]], None, None]:
     """Load each entry's provider, yielding it with its plugin settings.
 
     Entries are processed in order; ``provider`` is consumed here and the
-    remaining keys are returned as plugin settings.
+    remaining keys are returned as plugin settings. ``project_dir`` is passed
+    to :func:`load_provider`.
     """
     for entry in _validate_entries(entries):
         # 'provider' is the only key the loader consumes; the rest are plugin
         # settings, passed through verbatim to the provider.
         settings = {k: v for k, v in entry.items() if k != "provider"}
-        yield load_provider(entry["provider"]), settings
+        yield load_provider(entry["provider"], project_dir), settings
 
 
 def process_dynamic_metadata(
     project: Mapping[str, Any],
     entries: Sequence[Mapping[str, Any]],
     build_state: BuildState,
+    project_dir: StrPath | None = None,
 ) -> dict[str, Any]:
     """Process dynamic metadata.
 
@@ -304,6 +331,12 @@ def process_dynamic_metadata(
     that cares about it implements an optional ``build_state`` hook, called with
     this value before ``dynamic_metadata``; providers that ignore it simply omit
     the hook.
+
+    ``project_dir`` is the directory holding ``pyproject.toml``. If given, the
+    providers are loaded and their hooks run with it as the current directory,
+    since plugins resolve relative paths against the current directory. If
+    ``None``, the current directory is assumed to be the project root already
+    (as it is under ``pip`` and ``build``).
     """
 
     if build_state not in BUILD_STATES:
@@ -320,42 +353,44 @@ def process_dynamic_metadata(
     # still sitting in [project], which is the PEP 808 add-only case.
     produced: set[str] = set()
 
-    for provider, settings in load_dynamic_metadata(entries):
-        if isinstance(provider, DynamicMetadataBuildStateProtocol):
-            provider.build_state(build_state)
-        fragment = provider.dynamic_metadata(settings, snapshot)
+    with _working_dir(project_dir):
+        for provider, settings in load_dynamic_metadata(entries, project_dir):
+            if isinstance(provider, DynamicMetadataBuildStateProtocol):
+                provider.build_state(build_state)
+            fragment = provider.dynamic_metadata(settings, snapshot)
 
-        for field in fragment:
-            if field not in ALL_FIELDS:
-                msg = f"{field!r} is not a settable dynamic-metadata field"
-                raise InvalidFieldError(msg)
-            if field not in declared_dynamic:
-                msg = f"{field!r} must be listed in project.dynamic to be set"
-                raise InvalidFieldError(msg)
+            for field in fragment:
+                if field not in ALL_FIELDS:
+                    msg = f"{field!r} is not a settable dynamic-metadata field"
+                    raise InvalidFieldError(msg)
+                if field not in declared_dynamic:
+                    msg = f"{field!r} must be listed in project.dynamic to be set"
+                    raise InvalidFieldError(msg)
 
-        for field, value in fragment.items():
-            if field in produced:
-                # A second entry for this field: extend its prior result, or for
-                # a single-value field replace it (a transform pipeline).
-                result[field] = (
-                    value
-                    if field in SCALAR_FIELDS
-                    else _merge_metadata(field, result[field], value)
-                )
-            elif field in result:
-                # PEP 808: a static value is present; the provider only adds.
-                result[field] = _merge_metadata(field, result[field], value)
-            else:
-                result[field] = value
-            produced.add(field)
-            if field in result["dynamic"]:
-                result["dynamic"].remove(field)
+            for field, value in fragment.items():
+                if field in produced:
+                    # A second entry for this field: extend its prior result, or
+                    # for a single-value field replace it (a transform pipeline).
+                    result[field] = (
+                        value
+                        if field in SCALAR_FIELDS
+                        else _merge_metadata(field, result[field], value)
+                    )
+                elif field in result:
+                    # PEP 808: a static value is present; the provider only adds.
+                    result[field] = _merge_metadata(field, result[field], value)
+                else:
+                    result[field] = value
+                produced.add(field)
+                if field in result["dynamic"]:
+                    result["dynamic"].remove(field)
 
     return result
 
 
 def get_requires_for_dynamic_metadata(
     entries: Sequence[Mapping[str, Any]],
+    project_dir: StrPath | None = None,
 ) -> list[str]:
     """Collect every provider's extra build requirements, in entry order.
 
@@ -370,18 +405,22 @@ def get_requires_for_dynamic_metadata(
     local module still raises.
     """
     requires: list[str] = []
-    for entry in _validate_entries(entries):
-        settings = {k: v for k, v in entry.items() if k != "provider"}
-        try:
-            provider = load_provider(entry["provider"])
-        except ProviderLoadError:
-            continue
-        if isinstance(provider, DynamicMetadataRequirementsProtocol):
-            requires += provider.get_requires_for_dynamic_metadata(settings)
+    with _working_dir(project_dir):
+        for entry in _validate_entries(entries):
+            settings = {k: v for k, v in entry.items() if k != "provider"}
+            try:
+                provider = load_provider(entry["provider"], project_dir)
+            except ProviderLoadError:
+                continue
+            if isinstance(provider, DynamicMetadataRequirementsProtocol):
+                requires += provider.get_requires_for_dynamic_metadata(settings)
     return requires
 
 
-def dynamic_wheel_fields(entries: Sequence[Mapping[str, Any]]) -> set[str]:
+def dynamic_wheel_fields(
+    entries: Sequence[Mapping[str, Any]],
+    project_dir: StrPath | None = None,
+) -> set[str]:
     """Collect the fields to mark ``Dynamic`` in SDist metadata (METADATA 2.2).
 
     Asks each provider's optional ``dynamic_wheel`` hook which fields may
@@ -395,16 +434,17 @@ def dynamic_wheel_fields(entries: Sequence[Mapping[str, Any]]) -> set[str]:
     from a ``dynamic_metadata`` call.
     """
     fields: set[str] = set()
-    for provider, settings in load_dynamic_metadata(entries):
-        if not isinstance(provider, DynamicMetadataWheelProtocol):
-            continue
-        for field, is_dynamic in provider.dynamic_wheel(settings).items():
-            if field not in ALL_FIELDS:
-                msg = f"{field!r} is not a settable dynamic-metadata field"
-                raise InvalidFieldError(msg)
-            if field == "version" and is_dynamic:
-                msg = "'version' may never differ between the SDist and a wheel"
-                raise InvalidFieldError(msg)
-            if is_dynamic:
-                fields.add(field)
+    with _working_dir(project_dir):
+        for provider, settings in load_dynamic_metadata(entries, project_dir):
+            if not isinstance(provider, DynamicMetadataWheelProtocol):
+                continue
+            for field, is_dynamic in provider.dynamic_wheel(settings).items():
+                if field not in ALL_FIELDS:
+                    msg = f"{field!r} is not a settable dynamic-metadata field"
+                    raise InvalidFieldError(msg)
+                if field == "version" and is_dynamic:
+                    msg = "'version' may never differ between the SDist and a wheel"
+                    raise InvalidFieldError(msg)
+                if is_dynamic:
+                    fields.add(field)
     return fields

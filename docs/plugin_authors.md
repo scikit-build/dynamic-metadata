@@ -53,6 +53,14 @@ project as resolved so far; read another field's value with
 `project["version"]`. The backend calls this hook in the same directory as PEP
 517's hooks.
 
+### Relative paths
+
+Every hook runs with the project root (the directory holding `pyproject.toml`)
+as the current directory, so resolve a relative path in a setting against the
+current directory, as the bundled plugins do. PEP 517 front ends guarantee this
+already; a backend that runs from elsewhere passes `project_dir` to the loader,
+which changes directory around each hook for you.
+
 ### Imports
 
 Import optional or heavy dependencies inside the hooks, not at module level: a
