@@ -2419,3 +2419,11 @@ def test_substitute_readme_table_requires_text() -> None:
             "wheel",
         )
 
+
+def test_list_of_tables_rejects_wrong_shape() -> None:
+    with pytest.raises(TypeError, match="list of tables of strings"):
+        dynamic_metadata.loader.process_dynamic_metadata(
+            {"name": "test", "dynamic": ["authors"]},
+            [{"provider": "dynamic_metadata.static", "authors": [{"name": "a"}, "b"]}],
+            "wheel",
+        )

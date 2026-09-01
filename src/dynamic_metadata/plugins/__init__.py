@@ -98,11 +98,11 @@ def _process_dynamic_metadata(field: str, action: Callable[[str], str], result: 
         return {action(k): action(v) for k, v in result.items()}  # type: ignore[return-value, arg-type]
     if field in LIST_DICT_FIELDS:
         if not isinstance(result, list) or not all(
-            isinstance(k, str) and isinstance(v, str)
+            isinstance(d, dict)
+            and all(isinstance(k, str) and isinstance(v, str) for k, v in d.items())  # type: ignore[redundant-expr]
             for d in result
-            for k, v in d.items()  # type: ignore[union-attr]
         ):
-            msg = f"Field {field!r} must be a dictionary of strings"
+            msg = f"Field {field!r} must be a list of tables of strings"
             raise TypeError(msg)
         return [{k: action(v) for k, v in d.items()} for d in result]  # type: ignore[return-value, union-attr]
     return _process_nested_metadata(field, action, result)
