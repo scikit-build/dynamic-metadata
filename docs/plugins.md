@@ -375,8 +375,8 @@ a literal brace in the replacement must be doubled (`{{` / `}}`), as with any
 `requires-python`, `license`) or `readme` — and must already hold a value from
 an earlier entry. List and table fields are rejected: the backend _appends_ a
 provider's contribution to those, so re-emitting a whole transformed value would
-duplicate it. For `readme` the substitution is applied across the table, so
-anchor patterns to the body text rather than the content type.
+duplicate it. When `readme` or `license` holds a table, only its `text` is
+substituted; a table without `text` (a `file` reference) is an error.
 
 :::{warning}
 
