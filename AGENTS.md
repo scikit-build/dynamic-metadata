@@ -103,7 +103,7 @@ fields are rejected, `version` may never be dynamic). Both load providers fresh,
 so `dynamic_wheel` is stateless by design. All loader-raised errors derive from
 `errors.DynamicMetadataError` (`ConfigError`, `InvalidFieldError`,
 `ProviderNotFoundError`, `ProviderLoadError`); provider exceptions are not
-wrapped.
+wrapped. `require_version("0.6")` is the backend version check.
 
 ### Shared value-shaping helper — `plugins/__init__.py`
 

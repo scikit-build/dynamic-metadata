@@ -60,6 +60,24 @@ entries = entries_from_pyproject(pyproject)
 A field is only eligible if it appears in `project["dynamic"]`; the loader
 enforces this for you.
 
+### Checking the installed version
+
+If your backend does not depend on `dynamic-metadata` and relies on the user
+adding it to `[build-system].requires`, check for the version you need:
+
+```python
+try:
+    from dynamic_metadata import loader
+except ImportError:
+    raise MyBackendError(
+        "[[tool.dynamic-metadata]] needs 'dynamic-metadata' in [build-system].requires"
+    )
+loader.require_version("0.6")  # raises ConfigError with the same hint if too old
+```
+
+`require_version` was added in 0.6; if an older release must produce a good
+message too, use `getattr(loader, "require_version", None)`.
+
 ## Collecting build requirements
 
 In your `get_requires_for_build_*` hooks, add anything the providers ask for.

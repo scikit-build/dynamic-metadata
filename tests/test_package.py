@@ -2059,3 +2059,12 @@ def test_metadata_headers_cover_all_fields() -> None:
     assert (
         set(dynamic_metadata.info.METADATA_HEADERS) == dynamic_metadata.info.ALL_FIELDS
     )
+
+
+def test_require_version() -> None:
+    dynamic_metadata.loader.require_version("0.5")
+    dynamic_metadata.loader.require_version(dynamic_metadata.__version__)
+    with pytest.raises(
+        dynamic_metadata.errors.ConfigError, match=r"'dynamic-metadata >= 99\.0'"
+    ):
+        dynamic_metadata.loader.require_version("99.0")

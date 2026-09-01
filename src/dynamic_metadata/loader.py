@@ -5,6 +5,7 @@ import importlib
 import importlib.abc
 import importlib.machinery
 import inspect
+import re
 import sys
 from collections.abc import Mapping, Sequence
 from pathlib import Path
@@ -15,6 +16,7 @@ from typing import (
     cast,
 )
 
+from . import __version__
 from ._compat import metadata
 from .errors import (
     ConfigError,
@@ -53,6 +55,7 @@ __all__ = [
     "load_dynamic_metadata",
     "load_provider",
     "process_dynamic_metadata",
+    "require_version",
 ]
 
 
@@ -63,6 +66,26 @@ def __dir__() -> list[str]:
 # Entry-point group a plugin distribution registers a named provider under. The
 # bundled plugins register here too (see pyproject.toml).
 PROVIDER_GROUP = "dynamic_metadata.provider"
+
+
+def require_version(min_version: str) -> None:
+    """Raise :class:`~dynamic_metadata.errors.ConfigError` if the installed dynamic-metadata is older than ``min_version``.
+
+    The message tells the user to add ``dynamic-metadata >= min_version`` to
+    ``[build-system].requires``. Only the numeric release components are
+    compared. This function is new in 0.6; guard for older releases with
+    ``getattr(loader, "require_version", None)``.
+    """
+
+    def release(version: str) -> tuple[int, ...]:
+        return tuple(int(part) for part in re.findall(r"\d+", version))
+
+    if release(__version__) < release(min_version):
+        msg = (
+            f"dynamic-metadata {__version__} is too old; add "
+            f"'dynamic-metadata >= {min_version}' to [build-system].requires"
+        )
+        raise ConfigError(msg)
 
 
 class _ProviderPathFinder(importlib.abc.MetaPathFinder):
