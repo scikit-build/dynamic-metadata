@@ -6,6 +6,7 @@ __all__ = [
     "EXTENDABLE_FIELDS",
     "LIST_DICT_FIELDS",
     "LIST_STR_FIELDS",
+    "METADATA_HEADERS",
     "SCALAR_FIELDS",
     "STR_FIELDS",
 ]
@@ -69,3 +70,25 @@ ALL_FIELDS = (
 # the scalar fields (string fields and readme), which hold a single value and so
 # cannot be extended.
 EXTENDABLE_FIELDS = ALL_FIELDS - SCALAR_FIELDS
+
+# Core-metadata header(s) each field maps to, for the METADATA 2.2 ``Dynamic``
+# header (mirrors pyproject-metadata's ``field_to_metadata``). Entry-point
+# fields have no header, since they live in ``entry_points.txt``.
+METADATA_HEADERS: dict[str, frozenset[str]] = {
+    "authors": frozenset(["Author", "Author-Email"]),
+    "classifiers": frozenset(["Classifier"]),
+    "dependencies": frozenset(["Requires-Dist"]),
+    "description": frozenset(["Summary"]),
+    "entry-points": frozenset(),
+    "gui-scripts": frozenset(),
+    "keywords": frozenset(["Keywords"]),
+    "license": frozenset(["License", "License-Expression"]),
+    "license-files": frozenset(["License-File"]),
+    "maintainers": frozenset(["Maintainer", "Maintainer-Email"]),
+    "optional-dependencies": frozenset(["Provides-Extra", "Requires-Dist"]),
+    "readme": frozenset(["Description", "Description-Content-Type"]),
+    "requires-python": frozenset(["Requires-Python"]),
+    "scripts": frozenset(),
+    "urls": frozenset(["Project-URL"]),
+    "version": frozenset(["Version"]),
+}

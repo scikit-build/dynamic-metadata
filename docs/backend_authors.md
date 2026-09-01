@@ -75,6 +75,16 @@ requires += get_requires_for_dynamic_metadata(entries)
 Requirements are collected in entry order; a provider without the optional hook
 contributes nothing.
 
+A provider that is found but fails to import — typically one that imports at
+module level a package it would have declared as its own requirement — is
+skipped rather than raising, because its hook cannot be asked; the import error
+surfaces when the metadata is resolved. An unknown provider name or a missing
+local module always raises. Note that this hook can only run when
+`dynamic-metadata` is already in `[build-system].requires`, since your backend
+cannot import the loader otherwise; a backend that supports dynamic-metadata
+without depending on it should append its own `dynamic-metadata >= X`
+requirement when entries are present but the import fails.
+
 ## Resolving the metadata
 
 `process_dynamic_metadata` is the core call. It applies the entries in order,
@@ -103,9 +113,17 @@ the optional `dynamic_wheel` hook and returns the set of field names to mark:
 
 ```python
 from dynamic_metadata.loader import dynamic_wheel_fields
+from dynamic_metadata.info import METADATA_HEADERS
 
 fields = dynamic_wheel_fields(entries)
+headers = sorted({h for field in fields for h in METADATA_HEADERS[field]})
 ```
+
+Only an SDist build needs this. Remove these fields from `project["dynamic"]`
+before writing `PKG-INFO` (a field cannot be both given and listed in `dynamic`
+there) and write each of their core-metadata headers as a `Dynamic:` line;
+`METADATA_HEADERS` in {mod}`dynamic_metadata.info` maps a field to its headers
+(`optional-dependencies` → `Provides-Extra`, `Requires-Dist`).
 
 A field no provider mentions is **not** dynamic, and `version` may never be. A
 field is dynamic if _any_ provider reports it so: contributions to a field

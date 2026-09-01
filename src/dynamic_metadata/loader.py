@@ -362,9 +362,20 @@ def get_requires_for_dynamic_metadata(
     Call this from each PEP 517 ``get_requires_for_build_*`` hook. A provider
     without the optional ``get_requires_for_dynamic_metadata`` hook contributes
     nothing.
+
+    A provider that is found but fails to import — typically because it imports
+    at module level a package it would have declared as its own requirement —
+    is skipped, since its hook cannot be asked; the import error surfaces
+    later, when the metadata is resolved. An unknown provider name or a missing
+    local module still raises.
     """
-    requires = []
-    for provider, settings in load_dynamic_metadata(entries):
+    requires: list[str] = []
+    for entry in _validate_entries(entries):
+        settings = {k: v for k, v in entry.items() if k != "provider"}
+        try:
+            provider = load_provider(entry["provider"])
+        except ProviderLoadError:
+            continue
         if isinstance(provider, DynamicMetadataRequirementsProtocol):
             requires += provider.get_requires_for_dynamic_metadata(settings)
     return requires
