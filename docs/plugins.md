@@ -1,11 +1,12 @@
 # Bundled plugins
 
-This package ships eight plugins. `ast`, `regex`, `template`, `from_file`, and
+This package ships nine plugins. `ast`, `regex`, `template`, `from_file`, and
 `substitute` are generic — they read their target from a `field` setting.
 `static` writes values straight from its settings; `readme_fragment` and
 `pin_installed` are single-purpose and always write `readme` and `dependencies`
-respectively. Because they live inside `dynamic-metadata`, you must add
-`dynamic-metadata` to your `[build-system].requires` to use them.
+respectively; `testing` exercises every hook for backend integration tests.
+Because they live inside `dynamic-metadata`, you must add `dynamic-metadata` to
+your `[build-system].requires` to use them.
 
 Each registers a provider name of `dynamic_metadata.` plus the heading below, so
 the `regex` plugin is `provider = "dynamic_metadata.regex"`. The examples use
@@ -352,3 +353,29 @@ field set statically in `[project]` cannot be modified — a scalar field may no
 be both static and dynamic (PEP 808), so substituting one is an error.
 
 :::
+
+## `testing`
+
+`dynamic_metadata.testing` is for testing a backend's integration: it implements
+every hook, each driven by a setting, so a test needs no plugin file of its own.
+
+```toml
+[project]
+dynamic = ["description", "dependencies"]
+
+[[tool.dynamic-metadata]]
+provider = "dynamic_metadata.testing"
+fields = { description = "{project[name]} built as {build_state}", dependencies = ["dep"] }
+requires = ["test-plugin-requirement"]
+dynamic-wheel = ["dependencies"]
+```
+
+Settings (all optional):
+
+- `fields`: a table of metadata fields to return, in the shape each field takes
+  in `[project]`. Every string in a value is passed through `str.format` with
+  `build_state` (the value the `build_state` hook received) and `project` (the
+  project resolved so far), so `{build_state}` and `{project[name]}` are
+  substituted; a literal brace must be doubled.
+- `requires`: the list `get_requires_for_dynamic_metadata` returns.
+- `dynamic-wheel`: the fields `dynamic_wheel` reports as dynamic.

@@ -2071,3 +2071,50 @@ def test_import_names(field: str) -> None:
 
     assert result[field] == ["pkg"]
     assert not result["dynamic"]
+
+
+def test_testing_provider_all_hooks() -> None:
+    entries = [
+        {
+            "provider": "dynamic_metadata.testing",
+            "fields": {
+                "description": "{project[name]} built as {build_state}",
+                "dependencies": ["dep-{build_state}"],
+            },
+            "requires": ["test-plugin-requirement"],
+            "dynamic-wheel": ["dependencies"],
+        }
+    ]
+    project = dynamic_metadata.loader.process_dynamic_metadata(
+        {"name": "test", "dynamic": ["description", "dependencies"]},
+        entries,
+        "sdist",
+    )
+    assert project["description"] == "test built as sdist"
+    assert project["dependencies"] == ["dep-sdist"]
+    assert dynamic_metadata.loader.dynamic_wheel_fields(entries) == {"dependencies"}
+    assert dynamic_metadata.loader.get_requires_for_dynamic_metadata(entries) == [
+        "test-plugin-requirement"
+    ]
+
+
+def test_testing_provider_defaults() -> None:
+    entries = [{"provider": "dynamic_metadata.testing"}]
+    assert dynamic_metadata.loader.process_dynamic_metadata(
+        {"name": "test"}, entries, "wheel"
+    ) == {"name": "test", "dynamic": []}
+    assert dynamic_metadata.loader.dynamic_wheel_fields(entries) == set()
+    assert dynamic_metadata.loader.get_requires_for_dynamic_metadata(entries) == []
+
+
+def test_testing_provider_rejects_bad_settings() -> None:
+    with pytest.raises(RuntimeError, match="settings allowed"):
+        dynamic_metadata.loader.process_dynamic_metadata(
+            {"name": "test"},
+            [{"provider": "dynamic_metadata.testing", "nope": 1}],
+            "wheel",
+        )
+    with pytest.raises(RuntimeError, match="list of strings"):
+        dynamic_metadata.loader.dynamic_wheel_fields(
+            [{"provider": "dynamic_metadata.testing", "dynamic-wheel": "dependencies"}]
+        )
