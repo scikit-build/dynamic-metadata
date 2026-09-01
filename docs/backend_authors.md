@@ -159,6 +159,21 @@ except DynamicMetadataError as exc:
     raise MyBackendError(str(exc)) from exc
 ```
 
+## Testing your integration
+
+The bundled `dynamic_metadata.testing` provider implements all four hooks,
+driven by its settings, so an integration test needs no plugin file:
+
+```toml
+[[tool.dynamic-metadata]]
+provider = "dynamic_metadata.testing"
+fields = { description = "built as {build_state}", dependencies = ["dep"] }
+requires = ["test-plugin-requirement"]
+dynamic-wheel = ["dependencies"]
+```
+
+See [the plugin's documentation](plugins.md#testing).
+
 ## See also
 
 The [API reference](api/index.md) documents the protocols, the

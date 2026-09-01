@@ -136,6 +136,9 @@ encouraged to reuse or vendor.
   templates like `"torch==x.x.*"` (`x` = installed release component, `x+N`,
   trailing `*`); implements `dynamic_wheel` (dependencies are Dynamic in the
   SDist) and `get_requires_for_dynamic_metadata` (the bare names).
+- `testing.py` — a class provider implementing all four hooks from settings
+  (`fields`, `requires`, `dynamic-wheel`), for backend integration tests;
+  strings in `fields` are formatted with `{build_state}` and `{project[...]}`.
 
 ### Schema — `schema.py` + `resources/toml_schema.json`
 
