@@ -132,7 +132,14 @@ it if you would rather not maintain your own:
 
 ```python
 STR_FIELDS = {"version", "description", "requires-python", "license"}
-LIST_STR_FIELDS = {"classifiers", "keywords", "dependencies", "license-files"}
+LIST_STR_FIELDS = {
+    "classifiers",
+    "keywords",
+    "dependencies",
+    "license-files",
+    "import-names",
+    "import-namespaces",
+}
 DICT_STR_FIELDS = {"urls", "scripts", "gui-scripts"}
 LIST_DICT_FIELDS = {"authors", "maintainers"}
 
