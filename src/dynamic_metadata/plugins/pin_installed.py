@@ -38,7 +38,7 @@ def _packages(settings: Mapping[str, Any]) -> list[str]:
     packages = settings["packages"]
     if not isinstance(packages, list) or not all(isinstance(p, str) for p in packages):
         msg = "Setting 'packages' must be a list of strings"
-        raise RuntimeError(msg)
+        raise TypeError(msg)
     return packages
 
 

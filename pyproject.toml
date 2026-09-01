@@ -130,8 +130,9 @@ module = "dynamic_metadata.*"
 disallow_untyped_defs = true
 disallow_incomplete_defs = true
 
-[tool.ruff.lint]
-extend-select = [
+[tool.ruff]
+show-fixes = true
+lint.extend-select = [
   "B",           # flake8-bugbear
   "I",           # isort
   "ARG",         # flake8-unused-arguments
@@ -155,8 +156,8 @@ extend-select = [
   "NPY",         # NumPy specific rules
   "PD",          # pandas-vet
 ]
-flake8-unused-arguments.ignore-variadic-names = true
-isort.required-imports = ["from __future__ import annotations"]
+lint.flake8-unused-arguments.ignore-variadic-names = true
+lint.isort.required-imports = ["from __future__ import annotations"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["T20"]

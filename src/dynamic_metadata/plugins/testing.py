@@ -27,12 +27,12 @@ def _check(settings: Mapping[str, Any]) -> None:
         raise RuntimeError(msg)
     if not isinstance(settings.get("fields", {}), dict):
         msg = "Setting 'fields' must be a table"
-        raise RuntimeError(msg)
+        raise TypeError(msg)
     for key in ("requires", "dynamic-wheel"):
         value = settings.get(key, [])
         if not isinstance(value, list) or not all(isinstance(v, str) for v in value):
             msg = f"Setting {key!r} must be a list of strings"
-            raise RuntimeError(msg)
+            raise TypeError(msg)
 
 
 class Provider:

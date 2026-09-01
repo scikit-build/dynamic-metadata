@@ -57,7 +57,7 @@ def dynamic_metadata(
     path = settings["path"]
     if not isinstance(path, str):
         msg = "Setting 'path' must be a string"
-        raise RuntimeError(msg)
+        raise TypeError(msg)
 
     # A table field names the key to fill after a dot, one entry per key
     # (a further dot is part of the key, e.g. a 'urls' name).

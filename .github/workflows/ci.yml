@@ -30,14 +30,7 @@ jobs:
         with:
           python-version: "3.13"
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.cache/pre-commit
-          key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
-      - name: Run pre-commit
-        run:
-          uvx --with pre-commit-uv pre-commit run --all-files
-          --show-diff-on-failure
+      - uses: j178/prek-action@4e14d07f9231acabce116ccfca13b13dd9755ece # v3.0.0
       - name: Run PyLint
         run: uvx nox -s pylint -- --output-format=github
 

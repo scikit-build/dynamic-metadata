@@ -129,7 +129,7 @@ def dynamic_metadata(
     if "input" not in settings:
         raise RuntimeError("Must contain the 'input' setting to perform a regex on")
     if not all(isinstance(x, str) for x in settings.values()):
-        raise RuntimeError("All settings must be strings")
+        raise TypeError("All settings must be strings")
 
     field = settings["field"]
     # If not explicitly specified in the entry, the default regex below is used.

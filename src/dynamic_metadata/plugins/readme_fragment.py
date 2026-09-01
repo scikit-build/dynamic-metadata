@@ -104,7 +104,7 @@ def dynamic_metadata(
     for key in settings:
         if not isinstance(settings[key], str):
             msg = f"Setting {key!r} must be a string"
-            raise RuntimeError(msg)
+            raise TypeError(msg)
 
     fragment = _fragment_text(settings)
 
