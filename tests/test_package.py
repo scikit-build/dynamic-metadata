@@ -1306,6 +1306,95 @@ def test_static_field_must_be_dynamic() -> None:
         )
 
 
+def test_fields_sets_several_fields() -> None:
+    pyproject = dynamic_metadata.loader.process_dynamic_metadata(
+        {"name": "test", "dynamic": ["version", "description", "keywords"]},
+        [
+            {
+                "provider": "dynamic_metadata.fields",
+                "version": "1.2.3",
+                "description": "My package",
+                "keywords": ["a", "b"],
+            }
+        ],
+        "wheel",
+    )
+
+    assert pyproject["version"] == "1.2.3"
+    assert pyproject["description"] == "My package"
+    assert pyproject["keywords"] == ["a", "b"]
+    assert pyproject["dynamic"] == []
+
+
+def test_fields_formats_project() -> None:
+    # One entry sets several fields, each reading the project resolved so far.
+    pyproject = dynamic_metadata.loader.process_dynamic_metadata(
+        {"name": "test", "version": "1.2.3", "dynamic": ["description", "urls"]},
+        [
+            {
+                "provider": "dynamic_metadata.fields",
+                "description": "{project[name]} {project[version]}",
+                "urls": {"Release": "https://x.invalid/v{project[version]}"},
+            }
+        ],
+        "wheel",
+    )
+
+    assert pyproject["description"] == "test 1.2.3"
+    assert pyproject["urls"] == {"Release": "https://x.invalid/v1.2.3"}
+
+
+def test_fields_reads_earlier_entry() -> None:
+    pyproject = dynamic_metadata.loader.process_dynamic_metadata(
+        {"name": "test", "dynamic": ["version", "description"]},
+        [
+            {"provider": "dynamic_metadata.static", "version": "1.2.3"},
+            {
+                "provider": "dynamic_metadata.fields",
+                "description": "Version {project[version]}",
+            },
+        ],
+        "wheel",
+    )
+
+    assert pyproject["description"] == "Version 1.2.3"
+
+
+def test_fields_forward_reference_is_an_error() -> None:
+    with pytest.raises(KeyError):
+        dynamic_metadata.loader.process_dynamic_metadata(
+            {"name": "test", "dynamic": ["version", "description"]},
+            [
+                {
+                    "provider": "dynamic_metadata.fields",
+                    "description": "Version {project[version]}",
+                },
+                {"provider": "dynamic_metadata.static", "version": "1.2.3"},
+            ],
+            "wheel",
+        )
+
+
+def test_fields_rejects_unknown_field() -> None:
+    with pytest.raises(
+        dynamic_metadata.errors.InvalidFieldError, match="not a settable"
+    ):
+        dynamic_metadata.loader.process_dynamic_metadata(
+            {"name": "test", "dynamic": ["version"]},
+            [{"provider": "dynamic_metadata.fields", "descriptions": "typo"}],
+            "wheel",
+        )
+
+
+def test_fields_rejects_wrong_shape() -> None:
+    with pytest.raises(RuntimeError, match="must be a string"):
+        dynamic_metadata.loader.process_dynamic_metadata(
+            {"name": "test", "dynamic": ["version"]},
+            [{"provider": "dynamic_metadata.fields", "version": ["1.2.3"]}],
+            "wheel",
+        )
+
+
 def test_regex_short_name() -> None:
     # The bundled plugins are registered under dynamic_metadata-prefixed names,
     # so the registered name resolves via the entry-point group to the module.
