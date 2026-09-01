@@ -16,6 +16,12 @@ from typing import (
 )
 
 from ._compat import metadata
+from .errors import (
+    ConfigError,
+    InvalidFieldError,
+    ProviderLoadError,
+    ProviderNotFoundError,
+)
 from .info import (
     ALL_FIELDS,
     DICT_STR_FIELDS,
@@ -89,7 +95,7 @@ class _ProviderPathFinder(importlib.abc.MetaPathFinder):
         )
         if spec is None and fullname == self.provider_parent:
             msg = f"Cannot find module {self.provider!r} in {self.provider_path!r}"
-            raise ModuleNotFoundError(msg)
+            raise ProviderNotFoundError(msg)
         return spec
 
 
@@ -101,7 +107,7 @@ def _merge_dict(
     for key, value in additions.items():
         if key in merged and merged[key] != value:
             msg = f"Provider for {field!r} may not modify existing key {key!r}"
-            raise ValueError(msg)
+            raise InvalidFieldError(msg)
         merged[key] = value
     return merged
 
@@ -117,7 +123,7 @@ def _merge_metadata(field: str, static: Any, dynamic: Any) -> Any:
     """
     if field not in EXTENDABLE_FIELDS:
         msg = f"Field {field!r} cannot be given both statically and dynamically"
-        raise ValueError(msg)
+        raise InvalidFieldError(msg)
 
     if field in LIST_STR_FIELDS or field in LIST_DICT_FIELDS:
         return [*static, *dynamic]
@@ -147,13 +153,18 @@ def _import_provider(module: str, path: str) -> Any:
     """
     if not Path(path).is_dir():
         msg = f"provider 'path' {path!r} must be an existing directory"
-        raise ValueError(msg)
+        raise ConfigError(msg)
 
     module_name, _, class_name = module.partition(":")
     finder = _ProviderPathFinder([path], module_name)
     sys.meta_path.insert(0, finder)
     try:
         imported = importlib.import_module(module_name)
+    except ProviderNotFoundError:
+        raise
+    except ImportError as exc:
+        msg = f"Could not load provider {module!r} from {path!r}: {exc}"
+        raise ProviderLoadError(msg) from exc
     finally:
         sys.meta_path.remove(finder)
 
@@ -180,20 +191,20 @@ def _load_entry_point(name: str) -> Any:
         hint = f"; did you mean {matches[0]!r}?" if matches else ""
         available = ", ".join(known) or "none"
         msg = f"Unknown provider {name!r}{hint} (available: {available})"
-        raise ModuleNotFoundError(msg)
+        raise ProviderNotFoundError(msg)
     if len(eps) > 1:
         dists = ", ".join(sorted(_entry_point_dist(ep) or ep.value for ep in eps))
         msg = (
             f"Provider name {name!r} is registered by multiple distributions "
             f"({dists}); use an explicit 'module' or 'module:Class' provider"
         )
-        raise ValueError(msg)
+        raise ConfigError(msg)
     ep = eps[0]
     try:
         return ep.load()
     except (ImportError, AttributeError) as exc:
         msg = f"Could not load provider {name!r} ({ep.value!r}): {exc}"
-        raise ImportError(msg) from exc
+        raise ProviderLoadError(msg) from exc
 
 
 def load_provider(provider: object) -> DynamicMetadataProtocol:
@@ -223,7 +234,7 @@ def load_provider(provider: object) -> DynamicMetadataProtocol:
             "'provider' must be a registered name (string) or an inline table "
             "with exactly 'path' and 'module' keys"
         )
-        raise ValueError(msg)
+        raise ConfigError(msg)
     return cast("DynamicMetadataProtocol", obj() if inspect.isclass(obj) else obj)
 
 
@@ -238,7 +249,7 @@ def load_dynamic_metadata(
     for entry in entries:
         if "provider" not in entry:
             msg = "Each [[tool.dynamic-metadata]] entry must set a 'provider'"
-            raise KeyError(msg)
+            raise ConfigError(msg)
         # 'provider' is the only key the loader consumes; the rest are plugin
         # settings, passed through verbatim to the provider.
         settings = {k: v for k, v in entry.items() if k != "provider"}
@@ -269,7 +280,7 @@ def process_dynamic_metadata(
 
     if build_state not in BUILD_STATES:
         msg = f"build_state must be one of {sorted(BUILD_STATES)}, got {build_state!r}"
-        raise ValueError(msg)
+        raise ConfigError(msg)
 
     result = dict(project)
     result["dynamic"] = list(result.get("dynamic", []))
@@ -289,10 +300,10 @@ def process_dynamic_metadata(
         for field in fragment:
             if field not in ALL_FIELDS:
                 msg = f"{field!r} is not a settable dynamic-metadata field"
-                raise KeyError(msg)
+                raise InvalidFieldError(msg)
             if field not in declared_dynamic:
                 msg = f"{field!r} must be listed in project.dynamic to be set"
-                raise KeyError(msg)
+                raise InvalidFieldError(msg)
 
         for field, value in fragment.items():
             if field in produced:
@@ -351,10 +362,10 @@ def dynamic_wheel_fields(entries: Sequence[Mapping[str, Any]]) -> set[str]:
         for field, is_dynamic in provider.dynamic_wheel(settings).items():
             if field not in ALL_FIELDS:
                 msg = f"{field!r} is not a settable dynamic-metadata field"
-                raise KeyError(msg)
+                raise InvalidFieldError(msg)
             if field == "version" and is_dynamic:
                 msg = "'version' may never differ between the SDist and a wheel"
-                raise ValueError(msg)
+                raise InvalidFieldError(msg)
             if is_dynamic:
                 fields.add(field)
     return fields

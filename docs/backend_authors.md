@@ -120,6 +120,23 @@ build instead of recomputing it. Providers that do not care omit the hook; you
 just have to pass the right `build_state` value (from the table above) into
 `process_dynamic_metadata`.
 
+## Errors
+
+Every error the loader raises derives from
+{class}`~dynamic_metadata.errors.DynamicMetadataError` (see
+{mod}`dynamic_metadata.errors`), so one `except` translates them all; `str(exc)`
+is the message. An exception a provider raises from inside a hook is _not_
+wrapped, and propagates as-is.
+
+```python
+from dynamic_metadata.errors import DynamicMetadataError
+
+try:
+    project = process_dynamic_metadata(project, entries, build_state="wheel")
+except DynamicMetadataError as exc:
+    raise MyBackendError(str(exc)) from exc
+```
+
 ## See also
 
 The [API reference](api/index.md) documents the protocols, the

@@ -14,6 +14,14 @@ The driver consumed by build backends.
    :undoc-members:
 ```
 
+### Errors
+
+```{eval-rst}
+.. automodule:: dynamic_metadata.errors
+   :members:
+   :show-inheritance:
+```
+
 ### Plugin protocols
 
 The protocols a provider may implement. Every provider satisfies
