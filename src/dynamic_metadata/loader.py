@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import difflib
 import importlib
 import importlib.abc
@@ -28,6 +29,7 @@ from .info import (
     EXTENDABLE_FIELDS,
     LIST_DICT_FIELDS,
     LIST_STR_FIELDS,
+    METADATA_HEADERS,
     SCALAR_FIELDS,
 )
 from .protocols import (
@@ -40,19 +42,21 @@ from .protocols import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Generator
+    from collections.abc import Generator, Iterable
     from importlib.machinery import ModuleSpec
     from importlib.metadata import EntryPoint
     from types import ModuleType
 
 
 __all__ = [
+    "Resolved",
     "dynamic_wheel_fields",
     "entries_from_pyproject",
     "get_requires_for_dynamic_metadata",
     "load_dynamic_metadata",
     "load_provider",
     "process_dynamic_metadata",
+    "resolve",
 ]
 
 
@@ -408,3 +412,72 @@ def dynamic_wheel_fields(entries: Sequence[Mapping[str, Any]]) -> set[str]:
             if is_dynamic:
                 fields.add(field)
     return fields
+
+
+@dataclasses.dataclass(frozen=True)
+class Resolved:
+    """The result of :func:`resolve`."""
+
+    #: The new ``[project]`` table. Fields a provider produced are removed from
+    #: ``dynamic``, as are the SDist-dynamic fields below.
+    project: dict[str, Any]
+    #: For an SDist build, the fields whose value may differ in a wheel built
+    #: from it (METADATA 2.2 ``Dynamic``); empty for every other build state.
+    dynamic_fields: frozenset[str] = frozenset()
+
+    @property
+    def dynamic_headers(self) -> tuple[str, ...]:
+        """``dynamic_fields`` as sorted core-metadata header names (``Dynamic:`` values)."""
+        return tuple(
+            sorted(
+                {h for field in self.dynamic_fields for h in METADATA_HEADERS[field]}
+            )
+        )
+
+
+def resolve(
+    pyproject: Mapping[str, Any],
+    build_state: BuildState,
+    *,
+    backend_fields: Iterable[str] = (),
+    strict: bool = True,
+) -> Resolved:
+    """Resolve a whole parsed ``pyproject.toml``, handling the ``dynamic`` bookkeeping.
+
+    This is :func:`entries_from_pyproject`, :func:`process_dynamic_metadata`,
+    and (for ``"sdist"``) :func:`dynamic_wheel_fields` in one call. If there are
+    no entries the ``[project]`` table is returned unchanged (``{}`` if absent);
+    if there are entries but no ``[project]`` table, :class:`~dynamic_metadata.errors.ConfigError` is
+    raised.
+
+    For an SDist build, the fields the providers report as wheel-dynamic are
+    removed from ``dynamic`` (so the ``PKG-INFO`` is valid) and returned as
+    ``dynamic_fields`` for the backend to write as ``Dynamic:`` headers.
+
+    With ``strict`` (the default), a field still listed in ``dynamic`` after
+    that — declared dynamic but produced by no provider — raises
+    :class:`~dynamic_metadata.errors.ConfigError`, unless it is in ``backend_fields``, the fields the
+    backend fills in itself (for example ``version`` read from a build file).
+    """
+    entries = entries_from_pyproject(pyproject)
+    if not entries:
+        return Resolved(dict(pyproject.get("project", {})))
+    if "project" not in pyproject:
+        msg = "[[tool.dynamic-metadata]] entries require a [project] table"
+        raise ConfigError(msg)
+
+    project = process_dynamic_metadata(pyproject["project"], entries, build_state)
+    wheel_fields = (
+        frozenset(dynamic_wheel_fields(entries))
+        if build_state == "sdist"
+        else frozenset()
+    )
+    unset = set(project["dynamic"]) - wheel_fields - set(backend_fields)
+    if strict and unset:
+        msg = (
+            "Fields declared in project.dynamic but not set by any "
+            f"dynamic-metadata provider: {', '.join(sorted(unset))}"
+        )
+        raise ConfigError(msg)
+    project["dynamic"] = [f for f in project["dynamic"] if f not in wheel_fields]
+    return Resolved(project, wheel_fields)

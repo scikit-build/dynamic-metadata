@@ -2280,3 +2280,84 @@ def test_testing_provider_rejects_bad_settings() -> None:
         dynamic_metadata.loader.dynamic_wheel_fields(
             [{"provider": "dynamic_metadata.testing", "dynamic-wheel": "dependencies"}]
         )
+
+
+def test_resolved_dynamic_headers() -> None:
+    resolved = dynamic_metadata.loader.Resolved(
+        {}, frozenset({"optional-dependencies", "readme", "scripts"})
+    )
+    assert resolved.dynamic_headers == (
+        "Description",
+        "Description-Content-Type",
+        "Provides-Extra",
+        "Requires-Dist",
+    )
+
+
+def test_resolve_no_entries() -> None:
+    project = {"name": "test", "dynamic": ["version"]}
+    resolved = dynamic_metadata.loader.resolve({"project": project}, "wheel")
+    assert resolved.project == project
+    assert resolved.project is not project
+    assert resolved.dynamic_fields == frozenset()
+    assert dynamic_metadata.loader.resolve({}, "wheel").project == {}
+
+
+def test_resolve_requires_project_table() -> None:
+    with pytest.raises(dynamic_metadata.errors.ConfigError, match=r"\[project\]"):
+        dynamic_metadata.loader.resolve(
+            {"tool": {"dynamic-metadata": [{"provider": "dynamic_metadata.static"}]}},
+            "wheel",
+        )
+
+
+def _resolve_pyproject() -> dict[str, Any]:
+    return {
+        "project": {
+            "name": "test",
+            "dynamic": ["version", "description", "dependencies"],
+        },
+        "tool": {
+            "dynamic-metadata": [
+                {
+                    "provider": "dynamic_metadata.testing",
+                    "fields": {"version": "1.0"},
+                    "dynamic-wheel": ["dependencies"],
+                }
+            ]
+        },
+    }
+
+
+def test_resolve_sdist_dynamic_fields() -> None:
+    # For an sdist, wheel-dynamic fields leave `dynamic` and are reported for
+    # the Dynamic: header; the backend's own fields are excused from the check.
+    resolved = dynamic_metadata.loader.resolve(
+        _resolve_pyproject(), "sdist", backend_fields=["description"]
+    )
+    assert resolved.project == {
+        "name": "test",
+        "version": "1.0",
+        "dynamic": ["description"],
+    }
+    assert resolved.dynamic_fields == frozenset({"dependencies"})
+    assert resolved.dynamic_headers == ("Requires-Dist",)
+
+
+def test_resolve_strict_unset() -> None:
+    with pytest.raises(
+        dynamic_metadata.errors.ConfigError, match=r"not set by any.*: dependencies"
+    ):
+        dynamic_metadata.loader.resolve(
+            _resolve_pyproject(), "wheel", backend_fields=["description"]
+        )
+    with pytest.raises(
+        dynamic_metadata.errors.ConfigError, match=": dependencies, description"
+    ):
+        dynamic_metadata.loader.resolve(_resolve_pyproject(), "wheel")
+
+    resolved = dynamic_metadata.loader.resolve(
+        _resolve_pyproject(), "wheel", strict=False
+    )
+    assert resolved.project["dynamic"] == ["description", "dependencies"]
+    assert resolved.dynamic_fields == frozenset()

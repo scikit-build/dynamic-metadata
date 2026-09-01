@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, cast
 
 from ._compat import tomllib
 from .discovery import list_providers
-from .loader import process_dynamic_metadata
+from .loader import resolve
 from .protocols import BUILD_STATES
 
 if TYPE_CHECKING:
@@ -27,12 +27,7 @@ def main_show(args: argparse.Namespace, /) -> None:
     with Path(args.pyproject_toml).open("rb") as f:
         pyproject = tomllib.load(f)
 
-    project = pyproject.get("project", {})
-    entries = pyproject.get("tool", {}).get("dynamic-metadata", [])
-    if entries:
-        project = process_dynamic_metadata(
-            project, entries, cast("BuildState", args.state)
-        )
+    project = resolve(pyproject, cast("BuildState", args.state), strict=False).project
     print(json.dumps(project, indent=2))
 
 
