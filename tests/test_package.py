@@ -1354,7 +1354,7 @@ def test_dual_fields_template_a_string_readme() -> None:
 def test_static_rejects_wrong_shape() -> None:
     # static shares the fields plugin's shape check, so a mistyped value is
     # caught here rather than reaching the backend.
-    with pytest.raises(RuntimeError, match="must be a string"):
+    with pytest.raises(TypeError, match="must be a string"):
         dynamic_metadata.loader.process_dynamic_metadata(
             {"name": "test", "dynamic": ["version"]},
             [{"provider": "dynamic_metadata.static", "version": ["1.2.3"]}],
@@ -1460,7 +1460,7 @@ def test_fields_rejects_unknown_field() -> None:
 
 
 def test_fields_rejects_wrong_shape() -> None:
-    with pytest.raises(RuntimeError, match="must be a string"):
+    with pytest.raises(TypeError, match="must be a string"):
         dynamic_metadata.loader.process_dynamic_metadata(
             {"name": "test", "dynamic": ["version"]},
             [{"provider": "dynamic_metadata.fields", "version": ["1.2.3"]}],
@@ -2294,7 +2294,7 @@ def test_testing_provider_rejects_bad_settings() -> None:
             [{"provider": "dynamic_metadata.testing", "nope": 1}],
             "wheel",
         )
-    with pytest.raises(RuntimeError, match="list of strings"):
+    with pytest.raises(TypeError, match="list of strings"):
         dynamic_metadata.loader.dynamic_wheel_fields(
             [{"provider": "dynamic_metadata.testing", "dynamic-wheel": "dependencies"}]
         )
