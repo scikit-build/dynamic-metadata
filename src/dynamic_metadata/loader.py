@@ -6,7 +6,7 @@ import importlib.abc
 import importlib.machinery
 import inspect
 import sys
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from types import MappingProxyType
 from typing import (
@@ -40,7 +40,7 @@ from .protocols import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Sequence
+    from collections.abc import Generator
     from importlib.machinery import ModuleSpec
     from importlib.metadata import EntryPoint
     from types import ModuleType
@@ -48,6 +48,7 @@ if TYPE_CHECKING:
 
 __all__ = [
     "dynamic_wheel_fields",
+    "entries_from_pyproject",
     "get_requires_for_dynamic_metadata",
     "load_dynamic_metadata",
     "load_provider",
@@ -238,6 +239,36 @@ def load_provider(provider: object) -> DynamicMetadataProtocol:
     return cast("DynamicMetadataProtocol", obj() if inspect.isclass(obj) else obj)
 
 
+def _validate_entries(entries: object) -> list[Mapping[str, Any]]:
+    if not isinstance(entries, Sequence) or isinstance(entries, str):
+        msg = "tool.dynamic-metadata must be an array of tables"
+        raise ConfigError(msg)
+    for entry in entries:
+        if not isinstance(entry, Mapping):
+            msg = "tool.dynamic-metadata must be an array of tables"
+            raise ConfigError(msg)
+        if "provider" not in entry:
+            msg = "Each [[tool.dynamic-metadata]] entry must set a 'provider'"
+            raise ConfigError(msg)
+    return list(entries)
+
+
+def entries_from_pyproject(pyproject: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """Return the validated ``[[tool.dynamic-metadata]]`` entries of a parsed ``pyproject.toml``.
+
+    Returns ``[]`` if the table is absent. Raises
+    :class:`~dynamic_metadata.errors.ConfigError` if it is not an array of
+    tables or an entry lacks ``provider``.
+    """
+    tool = pyproject.get("tool", {})
+    if not isinstance(tool, Mapping):
+        msg = "tool must be a table"
+        raise ConfigError(msg)
+    return [
+        dict(entry) for entry in _validate_entries(tool.get("dynamic-metadata", []))
+    ]
+
+
 def load_dynamic_metadata(
     entries: Sequence[Mapping[str, Any]],
 ) -> Generator[tuple[DynamicMetadataProtocol, dict[str, Any]], None, None]:
@@ -246,10 +277,7 @@ def load_dynamic_metadata(
     Entries are processed in order; ``provider`` is consumed here and the
     remaining keys are returned as plugin settings.
     """
-    for entry in entries:
-        if "provider" not in entry:
-            msg = "Each [[tool.dynamic-metadata]] entry must set a 'provider'"
-            raise ConfigError(msg)
+    for entry in _validate_entries(entries):
         # 'provider' is the only key the loader consumes; the rest are plugin
         # settings, passed through verbatim to the provider.
         settings = {k: v for k, v in entry.items() if k != "provider"}
