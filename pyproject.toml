@@ -168,7 +168,6 @@ lint.isort.required-imports = ["from __future__ import annotations"]
 
 [tool.pylint]
 py-version = "3.8"
-ignore-paths= ["src/dynamic_metadata/_version.py"]
 reports.output-format = "colorized"
 similarities.ignore-imports = "yes"
 messages_control.disable = [
