@@ -76,10 +76,12 @@ single-purpose plugins hardcode it.
 
 `info.py` is the single source of truth for which `[project]` fields can be
 dynamic and what _shape_ their value has: `STR_FIELDS`, `LIST_STR_FIELDS`,
-`DICT_STR_FIELDS`, `LIST_DICT_FIELDS`, plus special-cased `readme`,
-`entry-points`, `optional-dependencies`. `name` and `dynamic` are intentionally
-excluded. `ALL_FIELDS` is the union and is what `loader.py` validates against.
-`METADATA_HEADERS` maps each field to its core-metadata header names.
+`DICT_STR_FIELDS`, `LIST_DICT_FIELDS`, plus special-cased `entry-points` and
+`optional-dependencies`. `DUAL_FIELDS` (`readme`, `license`) accept either a
+string or a table, so the value decides which shape is checked. `name` and
+`dynamic` are intentionally excluded. `ALL_FIELDS` is the union and is what
+`loader.py` validates against. `METADATA_HEADERS` maps each field to its
+core-metadata header names.
 
 ### Ordered resolution — `loader.py`
 
@@ -109,9 +111,12 @@ wrapped.
 
 `_process_dynamic_metadata(field, action, result)` applies a string-transform
 `action` across whatever container shape `field` requires (string, list, dict,
-dict-of-lists, etc.), validating the shape against `info.py`. Bundled plugins
-(`regex`, `template`) call this so they only write the transform once and get
-correct behavior for every field type. This is the helper plugin authors are
+dict-of-lists, etc.), validating the shape against `info.py`.
+`_fields_fragment(settings, action)` maps it over a whole field-to-value table,
+passing an unknown field through so the loader reports it by name; `fields`,
+`static`, `template`, and `testing` are all one call to it with a different
+`action`. Bundled plugins call these so they only write the transform once and
+get correct behavior for every field type. This is the helper plugin authors are
 encouraged to reuse or vendor.
 
 ### Bundled plugins — `plugins/`

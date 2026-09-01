@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-from . import _process_dynamic_metadata, _require_field
+from . import _fields_fragment, _require_field
 
 __all__ = ["dynamic_metadata"]
 
@@ -27,12 +27,7 @@ def dynamic_metadata(
         msg = "Must contain the 'result' setting with a template substitution"
         raise RuntimeError(msg)
 
-    result = settings["result"]
-
-    return {
-        field: _process_dynamic_metadata(
-            field,
-            lambda r: r.format(project=project),
-            result,
-        )
-    }
+    # One field is the only difference from the fields plugin.
+    return _fields_fragment(
+        {field: settings["result"]}, lambda r: r.format(project=project)
+    )
