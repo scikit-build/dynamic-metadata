@@ -10,6 +10,7 @@ import pytest
 
 import dynamic_metadata.__main__
 import dynamic_metadata.discovery
+import dynamic_metadata.errors
 import dynamic_metadata.loader
 import dynamic_metadata.plugins
 import dynamic_metadata.protocols
@@ -26,7 +27,7 @@ def _fake_group(*eps: EntryPoint) -> Callable[[str], list[EntryPoint]]:
 
 
 def _write_provider(plugin_dir: Path, name: str, body: str) -> None:
-    plugin_dir.mkdir(exist_ok=True)
+    plugin_dir.mkdir(parents=True, exist_ok=True)
     (plugin_dir / f"{name}.py").write_text(body)
 
 
@@ -230,7 +231,7 @@ def test_unknown_field_rejected(tmp_path: Path) -> None:
         "def dynamic_metadata(settings, project):\n    return {'not-a-field': 'x'}\n"
     )
 
-    with pytest.raises(KeyError, match="settable"):
+    with pytest.raises(dynamic_metadata.errors.InvalidFieldError, match="settable"):
         dynamic_metadata.loader.process_dynamic_metadata(
             {"name": "test", "dynamic": ["version"]},
             [{"provider": {"path": str(plugin_dir), "module": "bad_field_prov"}}],
@@ -245,7 +246,9 @@ def test_field_not_declared_dynamic_rejected(tmp_path: Path) -> None:
         "def dynamic_metadata(settings, project):\n    return {'version': '1.0'}\n"
     )
 
-    with pytest.raises(KeyError, match=r"project\.dynamic"):
+    with pytest.raises(
+        dynamic_metadata.errors.InvalidFieldError, match=r"project\.dynamic"
+    ):
         dynamic_metadata.loader.process_dynamic_metadata(
             {"name": "test", "dynamic": []},
             [{"provider": {"path": str(plugin_dir), "module": "undeclared_prov"}}],
@@ -573,7 +576,7 @@ def test_dynamic_wheel_fields_rejects_unknown_field(tmp_path: Path) -> None:
         "    return {}\n"
     )
 
-    with pytest.raises(KeyError, match="settable"):
+    with pytest.raises(dynamic_metadata.errors.InvalidFieldError, match="settable"):
         dynamic_metadata.loader.dynamic_wheel_fields(
             [{"provider": {"path": str(plugin_dir), "module": "wheel_bad"}}]
         )
@@ -596,7 +599,9 @@ def test_dynamic_wheel_fields_rejects_dynamic_version(tmp_path: Path) -> None:
 
 
 def test_load_dynamic_metadata_requires_provider_key() -> None:
-    with pytest.raises(KeyError, match="must set a 'provider'"):
+    with pytest.raises(
+        dynamic_metadata.errors.ConfigError, match="must set a 'provider'"
+    ):
         list(dynamic_metadata.loader.load_dynamic_metadata([{"field": "version"}]))
 
 
@@ -1270,7 +1275,9 @@ def test_static_then_substitute() -> None:
 
 
 def test_static_rejects_unknown_field() -> None:
-    with pytest.raises(KeyError, match="not a settable dynamic-metadata field"):
+    with pytest.raises(
+        dynamic_metadata.errors.InvalidFieldError, match="not a settable"
+    ):
         dynamic_metadata.loader.process_dynamic_metadata(
             {"name": "test", "dynamic": ["version"]},
             [
@@ -1284,7 +1291,9 @@ def test_static_rejects_unknown_field() -> None:
 
 
 def test_static_field_must_be_dynamic() -> None:
-    with pytest.raises(KeyError, match=r"must be listed in project\.dynamic"):
+    with pytest.raises(
+        dynamic_metadata.errors.InvalidFieldError, match=r"project\.dynamic"
+    ):
         dynamic_metadata.loader.process_dynamic_metadata(
             {"name": "test", "dynamic": []},
             [
@@ -1947,3 +1956,46 @@ def test_cli_providers(capsys: pytest.CaptureFixture[str]) -> None:
     out = capsys.readouterr().out
     assert "dynamic_metadata.regex" in out
     assert "dynamic_metadata.template" in out
+
+
+def test_errors_share_base() -> None:
+    # Every loader error derives from DynamicMetadataError (and keeps a
+    # standard base), so a backend can translate them with one except clause.
+    errors = dynamic_metadata.errors
+    for cls, base in [
+        (errors.ConfigError, ValueError),
+        (errors.InvalidFieldError, ValueError),
+        (errors.ProviderNotFoundError, ModuleNotFoundError),
+        (errors.ProviderLoadError, ImportError),
+    ]:
+        assert issubclass(cls, errors.DynamicMetadataError)
+        assert issubclass(cls, base)
+        assert str(cls("msg")) == "msg"
+
+
+def test_provider_not_found_error(tmp_path: Path) -> None:
+    with pytest.raises(dynamic_metadata.errors.ProviderNotFoundError):
+        dynamic_metadata.loader.load_provider(
+            {"path": str(tmp_path), "module": "nope_prov"}
+        )
+    with pytest.raises(dynamic_metadata.errors.ProviderNotFoundError):
+        dynamic_metadata.loader.load_provider("nope.provider")
+
+
+def test_provider_load_error_local(tmp_path: Path) -> None:
+    # A local provider whose own import fails is a load error, distinct from
+    # the provider module itself being missing.
+    _write_provider(tmp_path, "broken_import_prov", "import not_a_real_module_xyz\n")
+    with pytest.raises(
+        dynamic_metadata.errors.ProviderLoadError, match="Could not load provider"
+    ):
+        dynamic_metadata.loader.load_provider(
+            {"path": str(tmp_path), "module": "broken_import_prov"}
+        )
+
+
+def test_config_error_bad_provider_shape() -> None:
+    with pytest.raises(dynamic_metadata.errors.ConfigError):
+        dynamic_metadata.loader.load_provider(3)
+    with pytest.raises(dynamic_metadata.errors.ConfigError, match="build_state"):
+        dynamic_metadata.loader.process_dynamic_metadata({}, [], "bad")  # type: ignore[arg-type]
