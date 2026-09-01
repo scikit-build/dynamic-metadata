@@ -109,7 +109,7 @@ testpaths = [
 
 [tool.coverage]
 run.source = ["dynamic_metadata"]
-port.exclude_lines = [
+report.exclude_lines = [
   'pragma: no cover',
   '\.\.\.',
   'if typing.TYPE_CHECKING:',
