@@ -79,6 +79,7 @@ dynamic and what _shape_ their value has: `STR_FIELDS`, `LIST_STR_FIELDS`,
 `DICT_STR_FIELDS`, `LIST_DICT_FIELDS`, plus special-cased `readme`,
 `entry-points`, `optional-dependencies`. `name` and `dynamic` are intentionally
 excluded. `ALL_FIELDS` is the union and is what `loader.py` validates against.
+`METADATA_HEADERS` maps each field to its core-metadata header names.
 
 ### Ordered resolution — `loader.py`
 

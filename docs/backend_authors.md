@@ -115,9 +115,17 @@ the optional `dynamic_wheel` hook and returns the set of field names to mark:
 
 ```python
 from dynamic_metadata.loader import dynamic_wheel_fields
+from dynamic_metadata.info import METADATA_HEADERS
 
 fields = dynamic_wheel_fields(entries)
+headers = sorted({h for field in fields for h in METADATA_HEADERS[field]})
 ```
+
+Only an SDist build needs this. Remove these fields from `project["dynamic"]`
+before writing `PKG-INFO` (a field cannot be both given and listed in `dynamic`
+there) and write each of their core-metadata headers as a `Dynamic:` line;
+`METADATA_HEADERS` in {mod}`dynamic_metadata.info` maps a field to its headers
+(`optional-dependencies` → `Provides-Extra`, `Requires-Dist`).
 
 A field no provider mentions is **not** dynamic, and `version` may never be. A
 field is dynamic if _any_ provider reports it so: contributions to a field

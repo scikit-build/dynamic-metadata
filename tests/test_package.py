@@ -2128,3 +2128,9 @@ def test_cli_show_project_dir(
     )
 
     assert json.loads(capsys.readouterr().out)["version"] == "3.0"
+
+
+def test_metadata_headers_cover_all_fields() -> None:
+    assert (
+        set(dynamic_metadata.info.METADATA_HEADERS) == dynamic_metadata.info.ALL_FIELDS
+    )
