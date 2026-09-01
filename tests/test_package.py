@@ -2427,3 +2427,14 @@ def test_list_of_tables_rejects_wrong_shape() -> None:
             [{"provider": "dynamic_metadata.static", "authors": [{"name": "a"}, "b"]}],
             "wheel",
         )
+
+
+def test_cli_show_reports_loader_errors(tmp_path: Path) -> None:
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text(
+        '[project]\nname = "test"\ndynamic = ["version"]\n\n'
+        '[[tool.dynamic-metadata]]\nprovider = "nope"\n'
+    )
+
+    with pytest.raises(SystemExit, match="ProviderNotFoundError: Unknown provider"):
+        dynamic_metadata.__main__.main(["show", "--pyproject-toml", str(pyproject)])

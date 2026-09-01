@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, cast
 
 from ._compat import tomllib
 from .discovery import list_providers
+from .errors import DynamicMetadataError
 from .loader import resolve
 from .protocols import BUILD_STATES
 
@@ -82,7 +83,11 @@ def main(argv: Sequence[str] | None = None) -> None:
     )
     populate_parser(parser)
     args = parser.parse_args(argv)
-    args.func(args)
+    try:
+        args.func(args)
+    except DynamicMetadataError as exc:
+        msg = f"{type(exc).__name__}: {exc}"
+        raise SystemExit(msg) from exc
 
 
 if __name__ == "__main__":
