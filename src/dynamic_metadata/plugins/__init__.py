@@ -3,7 +3,13 @@ from __future__ import annotations
 import typing
 from collections.abc import Callable, Mapping
 
-from ..info import DICT_STR_FIELDS, LIST_DICT_FIELDS, LIST_STR_FIELDS, STR_FIELDS
+from ..info import (
+    ALL_FIELDS,
+    DICT_STR_FIELDS,
+    LIST_DICT_FIELDS,
+    LIST_STR_FIELDS,
+    STR_FIELDS,
+)
 
 T = typing.TypeVar(
     "T",
@@ -36,6 +42,22 @@ def _require_str_settings(settings: Mapping[str, typing.Any], keys: set[str]) ->
         if key in settings and not isinstance(settings[key], str):
             msg = f"Setting {key!r} must be a string"
             raise RuntimeError(msg)
+
+
+def _fields_fragment(
+    settings: Mapping[str, typing.Any], action: Callable[[str], str]
+) -> dict[str, typing.Any]:
+    """Build a metadata fragment from a field-to-value mapping, applying ``action``.
+
+    The shape of every value is checked against the field taxonomy. An unknown
+    field is passed through untouched, so the loader reports it by name.
+    """
+    return {
+        field: _process_dynamic_metadata(field, action, value)
+        if field in ALL_FIELDS
+        else value
+        for field, value in settings.items()
+    }
 
 
 def _process_dynamic_metadata(field: str, action: Callable[[str], str], result: T) -> T:

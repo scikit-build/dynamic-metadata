@@ -109,9 +109,12 @@ wrapped.
 
 `_process_dynamic_metadata(field, action, result)` applies a string-transform
 `action` across whatever container shape `field` requires (string, list, dict,
-dict-of-lists, etc.), validating the shape against `info.py`. Bundled plugins
-(`regex`, `template`) call this so they only write the transform once and get
-correct behavior for every field type. This is the helper plugin authors are
+dict-of-lists, etc.), validating the shape against `info.py`.
+`_fields_fragment(settings, action)` maps it over a whole field-to-value table,
+passing an unknown field through so the loader reports it by name; `fields`,
+`static`, `template`, and `testing` are all one call to it with a different
+`action`. Bundled plugins call these so they only write the transform once and
+get correct behavior for every field type. This is the helper plugin authors are
 encouraged to reuse or vendor.
 
 ### Bundled plugins — `plugins/`

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from . import _process_dynamic_metadata
+from . import _fields_fragment
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -53,14 +53,10 @@ class Provider:
         self, settings: Mapping[str, Any], project: Mapping[str, Any]
     ) -> dict[str, Any]:
         _check(settings)
-        return {
-            field: _process_dynamic_metadata(
-                field,
-                lambda s: s.format(build_state=self.state, project=project),
-                value,
-            )
-            for field, value in settings.get("fields", {}).items()
-        }
+        return _fields_fragment(
+            settings.get("fields", {}),
+            lambda s: s.format(build_state=self.state, project=project),
+        )
 
     def get_requires_for_dynamic_metadata(
         self, settings: Mapping[str, Any]

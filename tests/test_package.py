@@ -1306,6 +1306,34 @@ def test_static_field_must_be_dynamic() -> None:
         )
 
 
+def test_static_rejects_wrong_shape() -> None:
+    # static shares the fields plugin's shape check, so a mistyped value is
+    # caught here rather than reaching the backend.
+    with pytest.raises(RuntimeError, match="must be a string"):
+        dynamic_metadata.loader.process_dynamic_metadata(
+            {"name": "test", "dynamic": ["version"]},
+            [{"provider": "dynamic_metadata.static", "version": ["1.2.3"]}],
+            "wheel",
+        )
+
+
+def test_template_rejects_unknown_field() -> None:
+    with pytest.raises(
+        dynamic_metadata.errors.InvalidFieldError, match="not a settable"
+    ):
+        dynamic_metadata.loader.process_dynamic_metadata(
+            {"name": "test", "dynamic": ["version"]},
+            [
+                {
+                    "provider": "dynamic_metadata.template",
+                    "field": "descriptions",
+                    "result": "typo",
+                }
+            ],
+            "wheel",
+        )
+
+
 def test_fields_sets_several_fields() -> None:
     pyproject = dynamic_metadata.loader.process_dynamic_metadata(
         {"name": "test", "dynamic": ["version", "description", "keywords"]},
