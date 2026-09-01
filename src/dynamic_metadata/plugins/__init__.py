@@ -69,7 +69,7 @@ def _process_dual_metadata(field: str, action: Callable[[str], str], result: T) 
     if isinstance(result, dict) and all(isinstance(v, str) for v in result.values()):
         return {action(k): action(v) for k, v in result.items()}  # type: ignore[return-value, arg-type]
     msg = f"Field {field!r} must be a string or a table of strings"
-    raise RuntimeError(msg)
+    raise TypeError(msg)
 
 
 def _process_dynamic_metadata(field: str, action: Callable[[str], str], result: T) -> T:
