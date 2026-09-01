@@ -1328,7 +1328,7 @@ def test_dual_fields_take_a_string_or_a_table(field: str, value: Any) -> None:
 
 
 def test_dual_fields_reject_other_shapes() -> None:
-    with pytest.raises(RuntimeError, match="string or a table of strings"):
+    with pytest.raises(TypeError, match="string or a table of strings"):
         dynamic_metadata.loader.process_dynamic_metadata(
             {"name": "test", "dynamic": ["license"]},
             [{"provider": "dynamic_metadata.static", "license": ["MIT"]}],
