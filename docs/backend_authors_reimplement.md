@@ -114,6 +114,15 @@ reject a dynamic `version`, and treat a field as dynamic if _any_ provider says
 so — contributions to a field merge, so one dynamic part makes the merged value
 dynamic.
 
+Only an SDist build consults it. Remove the returned fields from
+`project["dynamic"]` before writing `PKG-INFO`, and write each field's
+core-metadata header(s) as `Dynamic:` lines — `dependencies` is `Requires-Dist`,
+`optional-dependencies` is `Provides-Extra` and `Requires-Dist`, `readme` is
+`Description` and `Description-Content-Type`, and so on (`METADATA_HEADERS` in
+`dynamic_metadata.info` is the full table). Whatever is then left in `dynamic`
+was declared but never produced: an error unless your backend fills that field
+itself.
+
 ## The field taxonomy
 
 You need to know which `[project]` fields a provider may set and what _shape_

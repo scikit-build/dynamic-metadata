@@ -2053,3 +2053,9 @@ def test_get_requires_skips_unloadable(tmp_path: Path) -> None:
         dynamic_metadata.loader.get_requires_for_dynamic_metadata(
             [{"provider": {"path": str(tmp_path), "module": "missing_prov"}}]
         )
+
+
+def test_metadata_headers_cover_all_fields() -> None:
+    assert (
+        set(dynamic_metadata.info.METADATA_HEADERS) == dynamic_metadata.info.ALL_FIELDS
+    )
