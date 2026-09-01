@@ -42,15 +42,19 @@ current directory.
 Parse `pyproject.toml` and take `tool.dynamic-metadata` as an **ordered list of
 tables**. Each table has a required `provider`; every other key is
 plugin-specific and passed through verbatim as that plugin's `settings`.
+{func}`~dynamic_metadata.loader.entries_from_pyproject` reads and validates it,
+returning `[]` if absent:
 
 ```python
 import tomllib  # or tomli on <3.11
+
+from dynamic_metadata.loader import entries_from_pyproject
 
 with open("pyproject.toml", "rb") as f:
     pyproject = tomllib.load(f)
 
 project = pyproject.get("project", {})
-entries = pyproject.get("tool", {}).get("dynamic-metadata", [])
+entries = entries_from_pyproject(pyproject)
 ```
 
 A field is only eligible if it appears in `project["dynamic"]`; the loader

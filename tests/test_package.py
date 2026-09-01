@@ -1999,3 +1999,33 @@ def test_config_error_bad_provider_shape() -> None:
         dynamic_metadata.loader.load_provider(3)
     with pytest.raises(dynamic_metadata.errors.ConfigError, match="build_state"):
         dynamic_metadata.loader.process_dynamic_metadata({}, [], "bad")  # type: ignore[arg-type]
+
+
+def test_entries_from_pyproject() -> None:
+    entries = dynamic_metadata.loader.entries_from_pyproject(
+        {"tool": {"dynamic-metadata": [{"provider": "x", "a": 1}]}}
+    )
+    assert entries == [{"provider": "x", "a": 1}]
+    assert dynamic_metadata.loader.entries_from_pyproject({}) == []
+    assert dynamic_metadata.loader.entries_from_pyproject({"tool": {}}) == []
+
+
+@pytest.mark.parametrize(
+    ("value", "match"),
+    [
+        ({"provider": "x"}, "array of tables"),
+        ("x", "array of tables"),
+        (["x"], "array of tables"),
+        ([{"a": 1}], "must set a 'provider'"),
+    ],
+)
+def test_entries_from_pyproject_rejects(value: Any, match: str) -> None:
+    with pytest.raises(dynamic_metadata.errors.ConfigError, match=match):
+        dynamic_metadata.loader.entries_from_pyproject(
+            {"tool": {"dynamic-metadata": value}}
+        )
+
+
+def test_load_dynamic_metadata_rejects_non_table() -> None:
+    with pytest.raises(dynamic_metadata.errors.ConfigError, match="array of tables"):
+        list(dynamic_metadata.loader.load_dynamic_metadata(["x"]))  # type: ignore[list-item]

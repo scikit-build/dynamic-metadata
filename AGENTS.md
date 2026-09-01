@@ -83,12 +83,13 @@ excluded. `ALL_FIELDS` is the union and is what `loader.py` validates against.
 ### Ordered resolution — `loader.py`
 
 `process_dynamic_metadata(project, entries, build_state)` is the entry point.
-`entries` is the **ordered list** of `[[tool.dynamic-metadata]]` tables. It
-builds a plain `dict` and applies entries in order: each provider gets a
-read-only `MappingProxyType` snapshot of the project resolved so far, so a later
-entry reads an earlier one's result with `project[...]` (a forward reference is
-just a `KeyError`; cycles are structurally impossible). The returned fragment is
-merged per field by `_merge_metadata` — lists append, tables add keys (PEP 808
+`entries` is the **ordered list** of `[[tool.dynamic-metadata]]` tables
+(`entries_from_pyproject(pyproject)` reads and validates it). It builds a plain
+`dict` and applies entries in order: each provider gets a read-only
+`MappingProxyType` snapshot of the project resolved so far, so a later entry
+reads an earlier one's result with `project[...]` (a forward reference is just a
+`KeyError`; cycles are structurally impossible). The returned fragment is merged
+per field by `_merge_metadata` — lists append, tables add keys (PEP 808
 add-only), and a single-value field is replaced if a later entry targets it (a
 `produced` set distinguishes a prior entry's result from a static value, which
 for a scalar is the rejected static+dynamic case). Each resolved field is
