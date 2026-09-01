@@ -53,6 +53,13 @@ project as resolved so far; read another field's value with
 `project["version"]`. The backend calls this hook in the same directory as PEP
 517's hooks.
 
+### Imports
+
+Import optional or heavy dependencies inside the hooks, not at module level: a
+provider whose import fails cannot be asked for its
+[build requirements](#optional-hooks), so a module-level import of the very
+package it would request is skipped by the backend.
+
 ## Optional hooks
 
 ### Receiving the build state

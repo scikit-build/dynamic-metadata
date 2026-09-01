@@ -95,13 +95,14 @@ add-only), and a single-value field is replaced if a later entry targets it (a
 for a scalar is the rejected static+dynamic case). Each resolved field is
 removed from `dynamic`. The loader also provides the two backend collection
 loops for the optional hooks: `get_requires_for_dynamic_metadata(entries)`
-(concatenates in entry order) and `dynamic_wheel_fields(entries)` (the METADATA
-2.2 set for SDist `PKG-INFO`; a field is dynamic if _any_ provider says so,
-unknown fields are rejected, `version` may never be dynamic). Both load
-providers fresh, so `dynamic_wheel` is stateless by design. All loader-raised
-errors derive from `errors.DynamicMetadataError` (`ConfigError`,
-`InvalidFieldError`, `ProviderNotFoundError`, `ProviderLoadError`); provider
-exceptions are not wrapped.
+(concatenates in entry order; skips a provider that fails to import, since its
+hook cannot be asked) and `dynamic_wheel_fields(entries)` (the METADATA 2.2 set
+for SDist `PKG-INFO`; a field is dynamic if _any_ provider says so, unknown
+fields are rejected, `version` may never be dynamic). Both load providers fresh,
+so `dynamic_wheel` is stateless by design. All loader-raised errors derive from
+`errors.DynamicMetadataError` (`ConfigError`, `InvalidFieldError`,
+`ProviderNotFoundError`, `ProviderLoadError`); provider exceptions are not
+wrapped.
 
 ### Shared value-shaping helper — `plugins/__init__.py`
 

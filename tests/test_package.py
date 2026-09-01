@@ -2029,3 +2029,27 @@ def test_entries_from_pyproject_rejects(value: Any, match: str) -> None:
 def test_load_dynamic_metadata_rejects_non_table() -> None:
     with pytest.raises(dynamic_metadata.errors.ConfigError, match="array of tables"):
         list(dynamic_metadata.loader.load_dynamic_metadata(["x"]))  # type: ignore[list-item]
+
+
+def test_get_requires_skips_unloadable(tmp_path: Path) -> None:
+    # A provider importing (at module level) a package it would have declared
+    # as a requirement is skipped; other providers still contribute. A missing
+    # provider module is a config error and still raises.
+    _write_provider(tmp_path, "unloadable_prov", "import not_a_real_module_xyz\n")
+    _write_provider(
+        tmp_path,
+        "loadable_prov",
+        "def get_requires_for_dynamic_metadata(settings):\n    return ['dep']\n"
+        "def dynamic_metadata(settings, project):\n    return {}\n",
+    )
+    entries = [
+        {"provider": {"path": str(tmp_path), "module": "unloadable_prov"}},
+        {"provider": {"path": str(tmp_path), "module": "loadable_prov"}},
+    ]
+    requires = dynamic_metadata.loader.get_requires_for_dynamic_metadata(entries)
+    assert requires == ["dep"]
+
+    with pytest.raises(dynamic_metadata.errors.ProviderNotFoundError):
+        dynamic_metadata.loader.get_requires_for_dynamic_metadata(
+            [{"provider": {"path": str(tmp_path), "module": "missing_prov"}}]
+        )
