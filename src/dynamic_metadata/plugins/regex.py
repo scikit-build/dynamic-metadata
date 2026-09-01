@@ -47,7 +47,6 @@ def dynamic_metadata(
         r'(?i)^(__version__|VERSION)(?: ?\: ?str)? *= *([\'"])v?(?P<value>.+?)\2',
     )
     result = settings.get("result", "{value}")
-    assert isinstance(result, str)
     remove = settings.get("remove", "")
 
     with Path(input_filename).open(encoding="utf-8") as f:
