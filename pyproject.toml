@@ -34,7 +34,7 @@ classifiers = [
 ]
 dynamic = ["version"]
 dependencies = [
-  "typing_extensions >=4.6; python_version<'3.11'",
+  "importlib_resources >=1.3; python_version<'3.9'",
   "tomli >=1.1; python_version<'3.11'",
 ]
 
