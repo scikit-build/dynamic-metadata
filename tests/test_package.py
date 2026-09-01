@@ -2379,3 +2379,51 @@ def test_resolve_strict_unset() -> None:
     )
     assert resolved.project["dynamic"] == ["description", "dependencies"]
     assert resolved.dynamic_fields == frozenset()
+
+
+def test_substitute_readme_table_keeps_keys() -> None:
+    # Only the text is transformed; keys and the other values stay verbatim.
+    pyproject = dynamic_metadata.loader.process_dynamic_metadata(
+        {"name": "test", "dynamic": ["readme"]},
+        [
+            {
+                "provider": "dynamic_metadata.static",
+                "readme": {"text": "a-b", "content-type": "text/x-rst"},
+            },
+            {
+                "provider": "dynamic_metadata.substitute",
+                "field": "readme",
+                "pattern": "-",
+                "replacement": "_",
+            },
+        ],
+        "wheel",
+    )
+
+    assert pyproject["readme"] == {"text": "a_b", "content-type": "text/x-rst"}
+
+
+def test_substitute_readme_table_requires_text() -> None:
+    with pytest.raises(RuntimeError, match="without 'text'"):
+        dynamic_metadata.loader.process_dynamic_metadata(
+            {"name": "test", "dynamic": ["license"]},
+            [
+                {"provider": "dynamic_metadata.static", "license": {"file": "L-1"}},
+                {
+                    "provider": "dynamic_metadata.substitute",
+                    "field": "license",
+                    "pattern": "-",
+                    "replacement": "_",
+                },
+            ],
+            "wheel",
+        )
+
+
+def test_list_of_tables_rejects_wrong_shape() -> None:
+    with pytest.raises(TypeError, match="list of tables of strings"):
+        dynamic_metadata.loader.process_dynamic_metadata(
+            {"name": "test", "dynamic": ["authors"]},
+            [{"provider": "dynamic_metadata.static", "authors": [{"name": "a"}, "b"]}],
+            "wheel",
+        )

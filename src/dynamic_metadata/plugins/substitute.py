@@ -64,11 +64,23 @@ def dynamic_metadata(
     if do_format:
         replacement = replacement.format(project=project)
     flags = re.IGNORECASE if ignore_case else 0
+    value = project[field]
+
+    # A readme/license table: substitute in the text only, leaving the keys,
+    # content-type, and file path alone.
+    if isinstance(value, dict):
+        if "text" not in value:
+            msg = f"Field {field!r} is a table without 'text'; nothing to substitute"
+            raise RuntimeError(msg)
+        return {
+            field: {
+                **value,
+                "text": re.sub(pattern, replacement, value["text"], flags=flags),
+            }
+        }
 
     return {
         field: _process_dynamic_metadata(
-            field,
-            lambda s: re.sub(pattern, replacement, s, flags=flags),
-            project[field],
+            field, lambda s: re.sub(pattern, replacement, s, flags=flags), value
         )
     }
