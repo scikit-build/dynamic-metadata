@@ -201,7 +201,7 @@ def _load_entry_point(name: str) -> Any:
         dists = ", ".join(sorted(_entry_point_dist(ep) or ep.value for ep in eps))
         msg = (
             f"Provider name {name!r} is registered by multiple distributions "
-            f"({dists}); use an explicit 'module' or 'module:Class' provider"
+            f"({dists}); uninstall one, or use an inline {{path, module}} provider"
         )
         raise ConfigError(msg)
     ep = eps[0]
