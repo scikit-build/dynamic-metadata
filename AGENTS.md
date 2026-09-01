@@ -85,14 +85,26 @@ core-metadata header names.
 
 ### Ordered resolution — `loader.py`
 
-`process_dynamic_metadata(project, entries, build_state)` is the entry point.
-`entries` is the **ordered list** of `[[tool.dynamic-metadata]]` tables
-(`entries_from_pyproject(pyproject)` reads and validates it). It builds a plain
-`dict` and applies entries in order: each provider gets a read-only
-`MappingProxyType` snapshot of the project resolved so far, so a later entry
-reads an earlier one's result with `project[...]` (a forward reference is just a
-`KeyError`; cycles are structurally impossible). The returned fragment is merged
-per field by `_merge_metadata` — lists append, tables add keys (PEP 808
+`resolve(pyproject, build_state, *, backend_fields, strict)` is the
+whole-pyproject entry point backends should use: it calls
+`entries_from_pyproject` (validates the array of tables),
+`process_dynamic_metadata`, and for `"sdist"` `dynamic_wheel_fields`, then
+strips wheel-dynamic fields from `dynamic` and errors on anything still dynamic
+that is not in `backend_fields` (fields the backend fills itself). It returns a
+`Resolved` dataclass (`project`, `dynamic_fields`, `dynamic_headers` via
+`info.METADATA_HEADERS`). Hooks run in the current directory, which PEP 517
+defines as the project root; a backend invoked from elsewhere chdirs itself. All
+loader-raised errors derive from `errors.DynamicMetadataError` (`ConfigError`,
+`InvalidFieldError`, `ProviderNotFoundError`, `ProviderLoadError`); provider
+exceptions are not wrapped.
+
+`process_dynamic_metadata(project, entries, build_state)` is the low-level entry
+point. `entries` is the **ordered list** of `[[tool.dynamic-metadata]]` tables.
+It builds a plain `dict` and applies entries in order: each provider gets a
+read-only `MappingProxyType` snapshot of the project resolved so far, so a later
+entry reads an earlier one's result with `project[...]` (a forward reference is
+just a `KeyError`; cycles are structurally impossible). The returned fragment is
+merged per field by `_merge_metadata` — lists append, tables add keys (PEP 808
 add-only), and a single-value field is replaced if a later entry targets it (a
 `produced` set distinguishes a prior entry's result from a static value, which
 for a scalar is the rejected static+dynamic case). Each resolved field is

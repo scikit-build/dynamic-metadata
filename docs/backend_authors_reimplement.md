@@ -121,7 +121,8 @@ core-metadata header(s) as `Dynamic:` lines — `dependencies` is `Requires-Dist
 `Description` and `Description-Content-Type`, and so on (`METADATA_HEADERS` in
 `dynamic_metadata.info` is the full table). Whatever is then left in `dynamic`
 was declared but never produced: an error unless your backend fills that field
-itself.
+itself. `resolve` in {mod}`dynamic_metadata.loader` is this bookkeeping in one
+function.
 
 ## The field taxonomy
 

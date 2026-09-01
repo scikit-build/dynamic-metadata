@@ -37,6 +37,54 @@ Run all hooks from the same directory PEP 517 uses (the project root), since
 plugins resolve relative paths like `input = "src/pkg/__init__.py"` against the
 current directory.
 
+## The short version
+
+{func}`~dynamic_metadata.loader.resolve` does everything below in one call,
+including the `dynamic` bookkeeping every backend otherwise repeats:
+
+```python
+import tomllib  # or tomli on <3.11
+
+from dynamic_metadata.errors import DynamicMetadataError
+from dynamic_metadata.loader import (
+    entries_from_pyproject,
+    get_requires_for_dynamic_metadata,
+    resolve,
+)
+
+with open("pyproject.toml", "rb") as f:
+    pyproject = tomllib.load(f)
+
+
+def get_requires_for_build_wheel(config_settings=None):
+    return [..., *get_requires_for_dynamic_metadata(entries_from_pyproject(pyproject))]
+
+
+def build_sdist(sdist_directory, config_settings=None):
+    try:
+        resolved = resolve(pyproject, "sdist", backend_fields={"version"})
+    except DynamicMetadataError as exc:
+        raise MyBackendError(str(exc)) from exc
+    project = resolved.project  # the new [project] table
+    dynamic_lines = [f"Dynamic: {h}" for h in resolved.dynamic_headers]  # PKG-INFO
+```
+
+`resolve` returns `[project]` unchanged when there are no entries, and raises if
+entries exist without a `[project]` table. `backend_fields` names the fields
+your backend fills in itself (here `version`, say from a build file): with
+`strict=True` (the default) any other field still in `dynamic` afterwards —
+declared but produced by no provider — is an error. For an SDist it also asks
+the providers which fields are wheel-dynamic, removes those from `dynamic` so
+the `PKG-INFO` is valid, and hands them back as `dynamic_fields` (and as
+core-metadata header names in `dynamic_headers`) for the `Dynamic:` header. See
+[METADATA 2.2 dynamic status](#metadata-22-dynamic-status).
+
+The `except` clause works because every loader error shares one base — see
+[Errors](#errors) below.
+
+The rest of this page covers the pieces `resolve` is built from, for a backend
+that needs finer control.
+
 ## Reading the configuration
 
 Parse `pyproject.toml` and take `tool.dynamic-metadata` as an **ordered list of
@@ -46,12 +94,7 @@ plugin-specific and passed through verbatim as that plugin's `settings`.
 returning `[]` if absent:
 
 ```python
-import tomllib  # or tomli on <3.11
-
 from dynamic_metadata.loader import entries_from_pyproject
-
-with open("pyproject.toml", "rb") as f:
-    pyproject = tomllib.load(f)
 
 project = pyproject.get("project", {})
 entries = entries_from_pyproject(pyproject)
