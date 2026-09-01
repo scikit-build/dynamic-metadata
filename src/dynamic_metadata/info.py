@@ -21,13 +21,16 @@ STR_FIELDS = frozenset(
     ]
 )
 
-# Dynamic is not dynamically settable, so not in this list
+# Dynamic is not dynamically settable, so not in this list. The import-* fields
+# come from PEP 794 (core metadata 2.5).
 LIST_STR_FIELDS = frozenset(
     [
         "classifiers",
         "keywords",
         "dependencies",
         "license-files",
+        "import-names",
+        "import-namespaces",
     ]
 )
 
@@ -81,6 +84,8 @@ METADATA_HEADERS: dict[str, frozenset[str]] = {
     "description": frozenset(["Summary"]),
     "entry-points": frozenset(),
     "gui-scripts": frozenset(),
+    "import-names": frozenset(["Import-Name"]),
+    "import-namespaces": frozenset(["Import-Namespace"]),
     "keywords": frozenset(["Keywords"]),
     "license": frozenset(["License", "License-Expression"]),
     "license-files": frozenset(["License-File"]),

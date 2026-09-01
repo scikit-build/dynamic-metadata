@@ -2059,3 +2059,15 @@ def test_metadata_headers_cover_all_fields() -> None:
     assert (
         set(dynamic_metadata.info.METADATA_HEADERS) == dynamic_metadata.info.ALL_FIELDS
     )
+
+
+@pytest.mark.parametrize("field", ["import-names", "import-namespaces"])
+def test_import_names(field: str) -> None:
+    result = dynamic_metadata.loader.process_dynamic_metadata(
+        {"dynamic": [field]},
+        [{"provider": "dynamic_metadata.static", field: ["pkg"]}],
+        "wheel",
+    )
+
+    assert result[field] == ["pkg"]
+    assert not result["dynamic"]
