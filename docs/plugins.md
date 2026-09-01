@@ -1,12 +1,12 @@
 # Bundled plugins
 
-This package ships nine plugins. `ast`, `regex`, `template`, `from_file`, and
+This package ships ten plugins. `ast`, `regex`, `template`, `from_file`, and
 `substitute` are generic — they read their target from a `field` setting.
-`static` writes values straight from its settings; `readme_fragment` and
-`pin_installed` are single-purpose and always write `readme` and `dependencies`
-respectively; `testing` exercises every hook for backend integration tests.
-Because they live inside `dynamic-metadata`, you must add `dynamic-metadata` to
-your `[build-system].requires` to use them.
+`static` and `fields` write values straight from their settings;
+`readme_fragment` and `pin_installed` are single-purpose and always write
+`readme` and `dependencies` respectively; `testing` exercises every hook for
+backend integration tests. Because they live inside `dynamic-metadata`, you must
+add `dynamic-metadata` to your `[build-system].requires` to use them.
 
 Each registers a provider name of `dynamic_metadata.` plus the heading below, so
 the `regex` plugin is `provider = "dynamic_metadata.regex"`. The examples use
@@ -201,6 +201,37 @@ replacement = "b0"
 
 It can also keep metadata out of `[project]`, hiding it from tools that read
 `[project]` directly.
+
+## `fields`
+
+`dynamic_metadata.fields` is [`static`](#static) with templates: each setting is
+a metadata field, and every string in the value is formatted with
+`{project[...]}`, reading the project resolved so far. One entry can set several
+fields, where `template` sets one.
+
+```toml
+[project]
+name = "my-package"
+dynamic = ["version", "description", "urls"]
+
+[[tool.dynamic-metadata]]
+provider = "dynamic_metadata.regex"
+field = "version"
+input = "src/my_package/__init__.py"
+
+[[tool.dynamic-metadata]]
+provider = "dynamic_metadata.fields"
+description = "{project[name]} {project[version]}"
+urls = { Release = "https://github.com/me/my-package/releases/tag/v{project[version]}" }
+```
+
+Settings: any settable metadata field maps to the value to give it, in the same
+shape it would have in `[project]`. The fields must be listed in
+`project.dynamic`.
+
+Only fields produced by earlier entries (or already in `[project]`) can be read;
+a forward reference is a `KeyError`. A literal brace must be doubled (`{{`), so
+use `static` for values that must stay verbatim.
 
 ## `readme_fragment`
 

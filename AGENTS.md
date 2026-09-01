@@ -123,6 +123,8 @@ encouraged to reuse or vendor.
   `__version__`/`VERSION`).
 - `template.py` — `str.format` substitution using `{project[...]}`,
   demonstrating cross-field references (reading earlier entries' results).
+- `fields.py` — like `static`, but every string is a `{project[...]}` template,
+  so one entry can set several fields from earlier results.
 - `static.py` — settings returned verbatim as fields (gives a later entry a
   dynamic value to transform).
 - `substitute.py` — regex substitution on a scalar field produced by an earlier
