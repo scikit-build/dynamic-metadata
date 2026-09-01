@@ -40,17 +40,17 @@ def dynamic_metadata(
             raise RuntimeError(msg)
         if not isinstance(settings[key], str):
             msg = f"Setting {key!r} must be a string"
-            raise RuntimeError(msg)
+            raise TypeError(msg)
 
     ignore_case = settings.get("ignore-case", False)
     if not isinstance(ignore_case, bool):
         msg = "Setting 'ignore-case' must be a boolean"
-        raise RuntimeError(msg)
+        raise TypeError(msg)
 
     do_format = settings.get("format", False)
     if not isinstance(do_format, bool):
         msg = "Setting 'format' must be a boolean"
-        raise RuntimeError(msg)
+        raise TypeError(msg)
 
     if field not in project:
         msg = f"Field {field!r} must be produced by an earlier entry to substitute"

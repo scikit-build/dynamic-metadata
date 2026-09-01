@@ -1136,7 +1136,7 @@ def test_substitute_no_format_keeps_braces_literal() -> None:
 
 
 def test_substitute_format_rejects_non_bool() -> None:
-    with pytest.raises(RuntimeError, match="'format' must be a boolean"):
+    with pytest.raises(TypeError, match="'format' must be a boolean"):
         dynamic_metadata.loader.process_dynamic_metadata(
             {"name": "test", "dynamic": ["description"]},
             [
@@ -1867,22 +1867,30 @@ def test_pin_installed_rejects_bad_template(
 
 
 @pytest.mark.parametrize(
-    ("settings", "match"),
+    ("settings", "exc", "match"),
     [
-        pytest.param({}, "Must contain the 'packages'", id="missing"),
+        pytest.param({}, RuntimeError, "Must contain the 'packages'", id="missing"),
         pytest.param(
-            {"packages": "torch==x.x.*"}, "must be a list of strings", id="not-list"
+            {"packages": "torch==x.x.*"},
+            TypeError,
+            "must be a list of strings",
+            id="not-list",
         ),
-        pytest.param({"packages": [42]}, "must be a list of strings", id="not-str"),
         pytest.param(
-            {"packages": [], "typo": "oops"}, "settings allowed", id="unknown-setting"
+            {"packages": [42]}, TypeError, "must be a list of strings", id="not-str"
+        ),
+        pytest.param(
+            {"packages": [], "typo": "oops"},
+            RuntimeError,
+            "settings allowed",
+            id="unknown-setting",
         ),
     ],
 )
 def test_pin_installed_rejects_bad_settings(
-    settings: dict[str, Any], match: str
+    settings: dict[str, Any], exc: type[Exception], match: str
 ) -> None:
-    with pytest.raises(RuntimeError, match=match):
+    with pytest.raises(exc, match=match):
         dynamic_metadata.loader.process_dynamic_metadata(
             {"name": "test", "dynamic": ["dependencies"]},
             [{"provider": "dynamic_metadata.pin_installed", **settings}],
@@ -2048,54 +2056,64 @@ def test_from_file_rejects_option_lines(tmp_path: Path, line: str) -> None:
 
 
 @pytest.mark.parametrize(
-    ("settings", "match"),
+    ("settings", "exc", "match"),
     [
         pytest.param(
             {"field": "readme", "path": "x.md"},
+            RuntimeError,
             "readme_fragment",
             id="readme",
         ),
         pytest.param(
             {"field": "optional-dependencies", "path": "x.txt"},
+            RuntimeError,
             "requires a key",
             id="table-without-key",
         ),
         pytest.param(
             {"field": "urls", "path": "x.txt"},
+            RuntimeError,
             "requires a key",
             id="urls-without-key",
         ),
         pytest.param(
             {"field": "dependencies.test", "path": "x.txt"},
+            RuntimeError,
             "does not take a dotted key",
             id="dotted-list-field",
         ),
         pytest.param(
             {"field": "authors", "path": "x.txt"},
+            RuntimeError,
             "cannot be read from a file",
             id="unsupported-field",
         ),
         pytest.param(
             {"field": "dependencies"},
+            RuntimeError,
             "'path' setting",
             id="missing-path",
         ),
         pytest.param(
             {"field": "dependencies", "path": 3},
+            TypeError,
             "must be a string",
             id="non-string-path",
         ),
         pytest.param(
             {"field": "dependencies", "path": "x.txt", "typo": "oops"},
+            RuntimeError,
             "settings allowed",
             id="unknown-setting",
         ),
     ],
 )
-def test_from_file_rejects_bad_settings(settings: dict[str, Any], match: str) -> None:
+def test_from_file_rejects_bad_settings(
+    settings: dict[str, Any], exc: type[Exception], match: str
+) -> None:
     # Settings and field shapes are validated before the file is read, so none
     # of these need the file to exist.
-    with pytest.raises(RuntimeError, match=match):
+    with pytest.raises(exc, match=match):
         dynamic_metadata.loader.process_dynamic_metadata(
             {
                 "name": "test",
