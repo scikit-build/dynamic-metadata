@@ -76,10 +76,12 @@ single-purpose plugins hardcode it.
 
 `info.py` is the single source of truth for which `[project]` fields can be
 dynamic and what _shape_ their value has: `STR_FIELDS`, `LIST_STR_FIELDS`,
-`DICT_STR_FIELDS`, `LIST_DICT_FIELDS`, plus special-cased `readme`,
-`entry-points`, `optional-dependencies`. `name` and `dynamic` are intentionally
-excluded. `ALL_FIELDS` is the union and is what `loader.py` validates against.
-`METADATA_HEADERS` maps each field to its core-metadata header names.
+`DICT_STR_FIELDS`, `LIST_DICT_FIELDS`, plus special-cased `entry-points` and
+`optional-dependencies`. `DUAL_FIELDS` (`readme`, `license`) accept either a
+string or a table, so the value decides which shape is checked. `name` and
+`dynamic` are intentionally excluded. `ALL_FIELDS` is the union and is what
+`loader.py` validates against. `METADATA_HEADERS` maps each field to its
+core-metadata header names.
 
 ### Ordered resolution — `loader.py`
 

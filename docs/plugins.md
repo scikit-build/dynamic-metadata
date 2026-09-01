@@ -178,8 +178,8 @@ description = "My package"
 Settings: any settable metadata field maps to the value to give it. The fields
 must be listed in `project.dynamic` like every dynamic field, and values use the
 same shape they would in `[project]` — a string for `version`, a list for
-`keywords`, a table for `readme`, and so on. A value of the wrong shape is an
-error.
+`keywords`, a string or a table for `readme` and `license`, and so on. A value
+of the wrong shape is an error.
 
 This is mainly useful as the first half of a pipeline: it gives a later entry
 like `substitute` a _dynamic_ value to transform, which a field set in

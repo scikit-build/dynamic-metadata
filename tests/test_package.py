@@ -1306,6 +1306,51 @@ def test_static_field_must_be_dynamic() -> None:
         )
 
 
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("readme", "README.md"),
+        ("readme", {"text": "Hi", "content-type": "text/markdown"}),
+        ("license", "MIT"),
+        ("license", {"text": "MIT"}),
+        ("license", {"file": "LICENSE"}),
+    ],
+)
+def test_dual_fields_take_a_string_or_a_table(field: str, value: Any) -> None:
+    # readme and license accept either shape, so both must survive the plugins.
+    pyproject = dynamic_metadata.loader.process_dynamic_metadata(
+        {"name": "test", "dynamic": [field]},
+        [{"provider": "dynamic_metadata.static", field: value}],
+        "wheel",
+    )
+
+    assert pyproject[field] == value
+
+
+def test_dual_fields_reject_other_shapes() -> None:
+    with pytest.raises(RuntimeError, match="string or a table of strings"):
+        dynamic_metadata.loader.process_dynamic_metadata(
+            {"name": "test", "dynamic": ["license"]},
+            [{"provider": "dynamic_metadata.static", "license": ["MIT"]}],
+            "wheel",
+        )
+
+
+def test_dual_fields_template_a_string_readme() -> None:
+    pyproject = dynamic_metadata.loader.process_dynamic_metadata(
+        {"name": "test", "version": "1.2.3", "dynamic": ["readme"]},
+        [
+            {
+                "provider": "dynamic_metadata.fields",
+                "readme": "docs/{project[version]}.md",
+            }
+        ],
+        "wheel",
+    )
+
+    assert pyproject["readme"] == "docs/1.2.3.md"
+
+
 def test_static_rejects_wrong_shape() -> None:
     # static shares the fields plugin's shape check, so a mistyped value is
     # caught here rather than reaching the backend.

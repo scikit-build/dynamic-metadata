@@ -6,6 +6,7 @@ from collections.abc import Callable, Mapping
 from ..info import (
     ALL_FIELDS,
     DICT_STR_FIELDS,
+    DUAL_FIELDS,
     LIST_DICT_FIELDS,
     LIST_STR_FIELDS,
     STR_FIELDS,
@@ -60,11 +61,24 @@ def _fields_fragment(
     }
 
 
+def _process_dual_metadata(field: str, action: Callable[[str], str], result: T) -> T:
+    """Handle a field that takes either a string or a table of strings."""
+
+    if isinstance(result, str):
+        return action(result)  # type: ignore[return-value]
+    if isinstance(result, dict) and all(isinstance(v, str) for v in result.values()):
+        return {action(k): action(v) for k, v in result.items()}  # type: ignore[return-value, arg-type]
+    msg = f"Field {field!r} must be a string or a table of strings"
+    raise RuntimeError(msg)
+
+
 def _process_dynamic_metadata(field: str, action: Callable[[str], str], result: T) -> T:
     """
     Helper function for processing an action on the various possible metadata fields.
     """
 
+    if field in DUAL_FIELDS:
+        return _process_dual_metadata(field, action, result)
     if field in STR_FIELDS:
         if not isinstance(result, str):
             msg = f"Field {field!r} must be a string"
@@ -75,7 +89,7 @@ def _process_dynamic_metadata(field: str, action: Callable[[str], str], result: 
             msg = f"Field {field!r} must be a list of strings"
             raise RuntimeError(msg)
         return [action(r) for r in result]  # type: ignore[return-value, arg-type]
-    if field in DICT_STR_FIELDS | {"readme"}:
+    if field in DICT_STR_FIELDS:
         if not isinstance(result, dict) or not all(
             isinstance(v, str) for v in result.values()
         ):
@@ -91,6 +105,12 @@ def _process_dynamic_metadata(field: str, action: Callable[[str], str], result: 
             msg = f"Field {field!r} must be a dictionary of strings"
             raise RuntimeError(msg)
         return [{k: action(v) for k, v in d.items()} for d in result]  # type: ignore[return-value, union-attr]
+    return _process_nested_metadata(field, action, result)
+
+
+def _process_nested_metadata(field: str, action: Callable[[str], str], result: T) -> T:
+    """Handle the two fields whose value nests a container inside a table."""
+
     if field == "entry-points":
         if not isinstance(result, dict) or not all(
             isinstance(d, dict)

@@ -3,6 +3,7 @@ from __future__ import annotations
 __all__ = [
     "ALL_FIELDS",
     "DICT_STR_FIELDS",
+    "DUAL_FIELDS",
     "EXTENDABLE_FIELDS",
     "LIST_DICT_FIELDS",
     "LIST_STR_FIELDS",
@@ -46,6 +47,16 @@ LIST_DICT_FIELDS = frozenset(
     [
         "authors",
         "maintainers",
+    ]
+)
+
+# Fields that accept either a string or a table of strings. "readme" takes a
+# path shorthand or a {file|text, content-type} table; "license" takes an SPDX
+# expression (PEP 639) or the classic {file} / {text} table.
+DUAL_FIELDS = frozenset(
+    [
+        "readme",
+        "license",
     ]
 )
 
