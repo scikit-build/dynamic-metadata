@@ -605,6 +605,51 @@ def test_load_dynamic_metadata_requires_provider_key() -> None:
         list(dynamic_metadata.loader.load_dynamic_metadata([{"field": "version"}]))
 
 
+def test_config_settings_not_passed_to_provider(tmp_path: Path) -> None:
+    _write_provider(
+        tmp_path,
+        "strict_prov",
+        "def _check(settings):\n"
+        "    assert set(settings) == {'value'}, settings\n"
+        "def dynamic_metadata(settings, project):\n"
+        "    _check(settings)\n"
+        "    return {'version': settings['value']}\n"
+        "def get_requires_for_dynamic_metadata(settings):\n"
+        "    _check(settings)\n"
+        "    return []\n"
+        "def dynamic_wheel(settings):\n"
+        "    _check(settings)\n"
+        "    return {}\n",
+    )
+    entries = [
+        {
+            "provider": {"path": str(tmp_path), "module": "strict_prov"},
+            "value": "1.0",
+            "config-settings": {"value": "my.version"},
+        }
+    ]
+    result = dynamic_metadata.loader.process_dynamic_metadata(
+        {"dynamic": ["version"]}, entries, "wheel"
+    )
+    assert result["version"] == "1.0"
+    assert dynamic_metadata.loader.get_requires_for_dynamic_metadata(entries) == []
+    assert dynamic_metadata.loader.dynamic_wheel_fields(entries) == set()
+
+
+@pytest.mark.parametrize(
+    ("value", "match"),
+    [
+        ("x", "'config-settings' must be a table of strings"),
+        ({"value": 1}, "'config-settings' must be a table of strings"),
+        ({"provider": "x"}, "may not map 'provider'"),
+    ],
+)
+def test_config_settings_rejects_bad_shape(value: object, match: str) -> None:
+    entry = {"provider": "dynamic_metadata.static", "config-settings": value}
+    with pytest.raises(dynamic_metadata.errors.ConfigError, match=match):
+        list(dynamic_metadata.loader.load_dynamic_metadata([entry]))
+
+
 def test_pep808_extends_static_dependencies() -> None:
     # PEP 808: a field may be both static and dynamic; the provider only adds.
     pyproject = dynamic_metadata.loader.process_dynamic_metadata(

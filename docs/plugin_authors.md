@@ -53,6 +53,10 @@ project as resolved so far; read another field's value with
 `project["version"]`. The backend calls this hook in the same directory as PEP
 517's hooks.
 
+`settings` never contains the reserved entry keys `provider` and
+`config-settings`, so do not use these names for settings. A backend may replace
+a setting value from a config-setting before your hook runs.
+
 ### Relative paths
 
 Every hook runs with the project root (the directory holding `pyproject.toml`)

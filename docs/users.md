@@ -15,6 +15,10 @@ provider = "dynamic_metadata.regex"
 # ... plugin settings ...
 ```
 
+Two keys are reserved: `provider`, and `config-settings`, which your backend may
+use to set a plugin setting from a config-setting (see your backend's docs).
+Neither is passed to the plugin.
+
 Run `dynamic-metadata providers` to see the names available in your environment.
 A plugin that lives inside your own project rather than an installed
 distribution is instead given as an [inline table](#providing-a-custom-plugin)
