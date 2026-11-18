@@ -254,15 +254,6 @@ def _validate_entries(entries: object) -> list[Mapping[str, Any]]:
         if "provider" not in entry:
             msg = "Each [[tool.dynamic-metadata]] entry must set a 'provider'"
             raise ConfigError(msg)
-        mapping = entry.get("config-settings", {})
-        if not isinstance(mapping, Mapping) or not all(
-            isinstance(v, str) for v in mapping.values()
-        ):
-            msg = "'config-settings' must be a table of strings"
-            raise ConfigError(msg)
-        if "provider" in mapping:
-            msg = "'config-settings' may not map 'provider'"
-            raise ConfigError(msg)
     return list(entries)
 
 

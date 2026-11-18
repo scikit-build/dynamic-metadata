@@ -120,12 +120,12 @@ config-settings.variant = "torch.variant"
 A backend that supports the mapping replaces each mapped setting with the
 resolved config-setting value before it calls the loader; if the config-setting
 has no value, the static value in the entry stays. A backend that does not
-support it uses the static values. The table may not map `provider`.
+support it uses the static values. The loader does not check the shape of
+`config-settings`; the backend validates it.
 
 You MUST NOT pass `config-settings` to a provider hook. The loader removes it
-together with `provider`, and validates its shape. A loader from before 0.7
-passes it through to the plugin as a setting, and a plugin that rejects unknown
-settings then fails.
+together with `provider`. A loader from before 0.7 passes it through to the
+plugin as a setting, and a plugin that rejects unknown settings then fails.
 
 ## Collecting build requirements
 

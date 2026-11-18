@@ -29,10 +29,7 @@
           ]
         },
         "config-settings": {
-          "type": "object",
-          "description": "Reserved for the build backend: maps a plugin setting name to a backend config-setting name. Never passed to the plugin.",
-          "propertyNames": { "not": { "const": "provider" } },
-          "additionalProperties": { "type": "string" }
+          "description": "Reserved for the build backend, which defines its shape. Never passed to the plugin."
         }
       }
     }

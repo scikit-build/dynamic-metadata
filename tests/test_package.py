@@ -636,18 +636,12 @@ def test_config_settings_not_passed_to_provider(tmp_path: Path) -> None:
     assert dynamic_metadata.loader.dynamic_wheel_fields(entries) == set()
 
 
-@pytest.mark.parametrize(
-    ("value", "match"),
-    [
-        ("x", "'config-settings' must be a table of strings"),
-        ({"value": 1}, "'config-settings' must be a table of strings"),
-        ({"provider": "x"}, "may not map 'provider'"),
-    ],
-)
-def test_config_settings_rejects_bad_shape(value: object, match: str) -> None:
+@pytest.mark.parametrize("value", ["x", {"value": 1}, {"provider": "x"}])
+def test_config_settings_shape_not_checked(value: object) -> None:
+    # The backend owns the shape; the loader only drops the key.
     entry = {"provider": "dynamic_metadata.static", "config-settings": value}
-    with pytest.raises(dynamic_metadata.errors.ConfigError, match=match):
-        list(dynamic_metadata.loader.load_dynamic_metadata([entry]))
+    [(_, settings)] = dynamic_metadata.loader.load_dynamic_metadata([entry])
+    assert settings == {}
 
 
 def test_pep808_extends_static_dependencies() -> None:
