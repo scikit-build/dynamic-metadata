@@ -117,9 +117,6 @@ variant = "cpu"
 tool.scikit-build.config-settings.variant = "torch.variant"
 ```
 
-Use dotted keys as shown. A `[tool.dynamic-metadata.tool.<backend>]` header is
-valid TOML, but it applies to the last entry only.
-
 A backend reads only its own table and ignores the tables of other backends, so
 the static values in the entry stay valid for every backend. A backend that
 changes settings from its table does so before it calls the loader. The loader
