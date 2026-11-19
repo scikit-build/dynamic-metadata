@@ -27,6 +27,10 @@
               }
             }
           ]
+        },
+        "tool": {
+          "type": "object",
+          "description": "Per-entry backend options, one table per backend (like the top-level tool table). Never passed to the plugin."
         }
       }
     }

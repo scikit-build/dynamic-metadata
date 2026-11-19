@@ -15,6 +15,10 @@ provider = "dynamic_metadata.regex"
 # ... plugin settings ...
 ```
 
+Two keys are reserved: `provider`, and `tool`, which holds options for your
+build backend, such as `tool.scikit-build.config-settings` (see your backend's
+docs). Neither is passed to the plugin.
+
 Run `dynamic-metadata providers` to see the names available in your environment.
 A plugin that lives inside your own project rather than an installed
 distribution is instead given as an [inline table](#providing-a-custom-plugin)

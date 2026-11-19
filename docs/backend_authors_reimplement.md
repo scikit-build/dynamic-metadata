@@ -66,6 +66,7 @@ def load_dynamic_metadata(entries):
     for entry in entries:
         entry = dict(entry)
         provider = entry.pop("provider")
+        entry.pop("tool", None)  # reserved for backends
         yield load_provider(provider), entry  # entry is now `settings`
 ```
 

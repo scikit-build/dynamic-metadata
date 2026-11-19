@@ -257,6 +257,14 @@ def _validate_entries(entries: object) -> list[Mapping[str, Any]]:
     return list(entries)
 
 
+# Keys the backend consumes; never passed to a provider.
+RESERVED_KEYS = frozenset({"provider", "tool"})
+
+
+def _settings(entry: Mapping[str, Any]) -> dict[str, Any]:
+    return {k: v for k, v in entry.items() if k not in RESERVED_KEYS}
+
+
 def entries_from_pyproject(pyproject: Mapping[str, Any]) -> list[dict[str, Any]]:
     """Return the validated ``[[tool.dynamic-metadata]]`` entries of a parsed ``pyproject.toml``.
 
@@ -278,14 +286,13 @@ def load_dynamic_metadata(
 ) -> Generator[tuple[DynamicMetadataProtocol, dict[str, Any]], None, None]:
     """Load each entry's provider, yielding it with its plugin settings.
 
-    Entries are processed in order; ``provider`` is consumed here and the
-    remaining keys are returned as plugin settings.
+    Entries are processed in order; the reserved keys ``provider`` and
+    ``tool`` are removed and the remaining keys are returned verbatim as
+    plugin settings. A backend that uses its ``tool.<backend>`` table to change
+    settings does so in the entries before calling this.
     """
     for entry in _validate_entries(entries):
-        # 'provider' is the only key the loader consumes; the rest are plugin
-        # settings, passed through verbatim to the provider.
-        settings = {k: v for k, v in entry.items() if k != "provider"}
-        yield load_provider(entry["provider"]), settings
+        yield load_provider(entry["provider"]), _settings(entry)
 
 
 def process_dynamic_metadata(
@@ -375,7 +382,7 @@ def get_requires_for_dynamic_metadata(
     """
     requires: list[str] = []
     for entry in _validate_entries(entries):
-        settings = {k: v for k, v in entry.items() if k != "provider"}
+        settings = _settings(entry)
         try:
             provider = load_provider(entry["provider"])
         except ProviderLoadError:

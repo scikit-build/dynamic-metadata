@@ -605,6 +605,45 @@ def test_load_dynamic_metadata_requires_provider_key() -> None:
         list(dynamic_metadata.loader.load_dynamic_metadata([{"field": "version"}]))
 
 
+def test_tool_not_passed_to_provider(tmp_path: Path) -> None:
+    _write_provider(
+        tmp_path,
+        "strict_prov",
+        "def _check(settings):\n"
+        "    assert set(settings) == {'value'}, settings\n"
+        "def dynamic_metadata(settings, project):\n"
+        "    _check(settings)\n"
+        "    return {'version': settings['value']}\n"
+        "def get_requires_for_dynamic_metadata(settings):\n"
+        "    _check(settings)\n"
+        "    return []\n"
+        "def dynamic_wheel(settings):\n"
+        "    _check(settings)\n"
+        "    return {}\n",
+    )
+    entries = [
+        {
+            "provider": {"path": str(tmp_path), "module": "strict_prov"},
+            "value": "1.0",
+            "tool": {"backend": {"config-settings": {"value": "my.version"}}},
+        }
+    ]
+    result = dynamic_metadata.loader.process_dynamic_metadata(
+        {"dynamic": ["version"]}, entries, "wheel"
+    )
+    assert result["version"] == "1.0"
+    assert dynamic_metadata.loader.get_requires_for_dynamic_metadata(entries) == []
+    assert dynamic_metadata.loader.dynamic_wheel_fields(entries) == set()
+
+
+@pytest.mark.parametrize("value", ["x", {"backend": 1}, {"provider": "x"}])
+def test_tool_shape_not_checked(value: object) -> None:
+    # Backends own the contents; the loader only drops the key.
+    entry = {"provider": "dynamic_metadata.static", "tool": value}
+    [(_, settings)] = dynamic_metadata.loader.load_dynamic_metadata([entry])
+    assert settings == {}
+
+
 def test_pep808_extends_static_dependencies() -> None:
     # PEP 808: a field may be both static and dynamic; the provider only adds.
     pyproject = dynamic_metadata.loader.process_dynamic_metadata(

@@ -88,10 +88,10 @@ that needs finer control.
 ## Reading the configuration
 
 Parse `pyproject.toml` and take `tool.dynamic-metadata` as an **ordered list of
-tables**. Each table has a required `provider`; every other key is
-plugin-specific and passed through verbatim as that plugin's `settings`.
-{func}`~dynamic_metadata.loader.entries_from_pyproject` reads and validates it,
-returning `[]` if absent:
+tables**. Each table has a required `provider` and an optional `tool`; every
+other key is plugin-specific and passed through verbatim as that plugin's
+`settings`. {func}`~dynamic_metadata.loader.entries_from_pyproject` reads and
+validates it, returning `[]` if absent:
 
 ```python
 from dynamic_metadata.loader import entries_from_pyproject
@@ -102,6 +102,29 @@ entries = entries_from_pyproject(pyproject)
 
 A field is only eligible if it appears in `project["dynamic"]`; the loader
 enforces this for you.
+
+### Backend options in an entry
+
+The `tool` key in an entry is reserved for build backends (added in 0.7). Like
+the top-level `[tool]` table, it holds one table per backend, named for that
+backend, and each backend defines the contents of its own table. For example, a
+backend can let a config-setting change a plugin setting:
+
+```toml
+[[tool.dynamic-metadata]]
+provider = "my_package.torch_deps"
+variant = "cpu"
+tool.scikit-build.config-settings.variant = "torch.variant"
+```
+
+A backend reads only its own table and ignores the tables of other backends, so
+the static values in the entry stay valid for every backend. A backend that
+changes settings from its table does so before it calls the loader. The loader
+does not check the contents of `tool`.
+
+You MUST NOT pass `tool` to a provider hook. The loader removes it together with
+`provider`. A loader from before 0.7 passes it through to the plugin as a
+setting, and a plugin that rejects unknown settings then fails.
 
 ## Collecting build requirements
 
