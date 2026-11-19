@@ -28,8 +28,9 @@
             }
           ]
         },
-        "config-settings": {
-          "description": "Reserved for the build backend, which defines its shape. Never passed to the plugin."
+        "tool": {
+          "type": "object",
+          "description": "Per-entry backend options, one table per backend (like the top-level tool table). Never passed to the plugin."
         }
       }
     }

@@ -605,7 +605,7 @@ def test_load_dynamic_metadata_requires_provider_key() -> None:
         list(dynamic_metadata.loader.load_dynamic_metadata([{"field": "version"}]))
 
 
-def test_config_settings_not_passed_to_provider(tmp_path: Path) -> None:
+def test_tool_not_passed_to_provider(tmp_path: Path) -> None:
     _write_provider(
         tmp_path,
         "strict_prov",
@@ -625,7 +625,7 @@ def test_config_settings_not_passed_to_provider(tmp_path: Path) -> None:
         {
             "provider": {"path": str(tmp_path), "module": "strict_prov"},
             "value": "1.0",
-            "config-settings": {"value": "my.version"},
+            "tool": {"backend": {"config-settings": {"value": "my.version"}}},
         }
     ]
     result = dynamic_metadata.loader.process_dynamic_metadata(
@@ -636,10 +636,10 @@ def test_config_settings_not_passed_to_provider(tmp_path: Path) -> None:
     assert dynamic_metadata.loader.dynamic_wheel_fields(entries) == set()
 
 
-@pytest.mark.parametrize("value", ["x", {"value": 1}, {"provider": "x"}])
-def test_config_settings_shape_not_checked(value: object) -> None:
-    # The backend owns the shape; the loader only drops the key.
-    entry = {"provider": "dynamic_metadata.static", "config-settings": value}
+@pytest.mark.parametrize("value", ["x", {"backend": 1}, {"provider": "x"}])
+def test_tool_shape_not_checked(value: object) -> None:
+    # Backends own the contents; the loader only drops the key.
+    entry = {"provider": "dynamic_metadata.static", "tool": value}
     [(_, settings)] = dynamic_metadata.loader.load_dynamic_metadata([entry])
     assert settings == {}
 

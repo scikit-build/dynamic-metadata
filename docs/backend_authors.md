@@ -88,11 +88,10 @@ that needs finer control.
 ## Reading the configuration
 
 Parse `pyproject.toml` and take `tool.dynamic-metadata` as an **ordered list of
-tables**. Each table has a required `provider` and an optional
-`config-settings`; every other key is plugin-specific and passed through
-verbatim as that plugin's `settings`.
-{func}`~dynamic_metadata.loader.entries_from_pyproject` reads and validates it,
-returning `[]` if absent:
+tables**. Each table has a required `provider` and an optional `tool`; every
+other key is plugin-specific and passed through verbatim as that plugin's
+`settings`. {func}`~dynamic_metadata.loader.entries_from_pyproject` reads and
+validates it, returning `[]` if absent:
 
 ```python
 from dynamic_metadata.loader import entries_from_pyproject
@@ -104,28 +103,31 @@ entries = entries_from_pyproject(pyproject)
 A field is only eligible if it appears in `project["dynamic"]`; the loader
 enforces this for you.
 
-### Mapping config-settings
+### Backend options in an entry
 
-`config-settings` is reserved for the backend (added in 0.7). It is a table that
-maps a plugin setting name (a key of the entry) to a backend config-setting
-name. What the config-setting names mean is up to the backend:
+The `tool` key in an entry is reserved for build backends (added in 0.7). Like
+the top-level `[tool]` table, it holds one table per backend, named for that
+backend, and each backend defines the contents of its own table. For example, a
+backend can let a config-setting change a plugin setting:
 
 ```toml
 [[tool.dynamic-metadata]]
 provider = "my_package.torch_deps"
 variant = "cpu"
-config-settings.variant = "torch.variant"
+tool.scikit-build.config-settings.variant = "torch.variant"
 ```
 
-A backend that supports the mapping replaces each mapped setting with the
-resolved config-setting value before it calls the loader; if the config-setting
-has no value, the static value in the entry stays. A backend that does not
-support it uses the static values. The loader does not check the shape of
-`config-settings`; the backend validates it.
+Use dotted keys as shown. A `[tool.dynamic-metadata.tool.<backend>]` header is
+valid TOML, but it applies to the last entry only.
 
-You MUST NOT pass `config-settings` to a provider hook. The loader removes it
-together with `provider`. A loader from before 0.7 passes it through to the
-plugin as a setting, and a plugin that rejects unknown settings then fails.
+A backend reads only its own table and ignores the tables of other backends, so
+the static values in the entry stay valid for every backend. A backend that
+changes settings from its table does so before it calls the loader. The loader
+does not check the contents of `tool`.
+
+You MUST NOT pass `tool` to a provider hook. The loader removes it together with
+`provider`. A loader from before 0.7 passes it through to the plugin as a
+setting, and a plugin that rejects unknown settings then fails.
 
 ## Collecting build requirements
 

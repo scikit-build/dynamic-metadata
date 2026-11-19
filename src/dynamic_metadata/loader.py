@@ -258,7 +258,7 @@ def _validate_entries(entries: object) -> list[Mapping[str, Any]]:
 
 
 # Keys the backend consumes; never passed to a provider.
-RESERVED_KEYS = frozenset({"provider", "config-settings"})
+RESERVED_KEYS = frozenset({"provider", "tool"})
 
 
 def _settings(entry: Mapping[str, Any]) -> dict[str, Any]:
@@ -287,9 +287,9 @@ def load_dynamic_metadata(
     """Load each entry's provider, yielding it with its plugin settings.
 
     Entries are processed in order; the reserved keys ``provider`` and
-    ``config-settings`` are removed and the remaining keys are returned
-    verbatim as plugin settings. A backend that supports ``config-settings``
-    substitutes the mapped values into the entries before calling this.
+    ``tool`` are removed and the remaining keys are returned verbatim as
+    plugin settings. A backend that uses its ``tool.<backend>`` table to change
+    settings does so in the entries before calling this.
     """
     for entry in _validate_entries(entries):
         yield load_provider(entry["provider"]), _settings(entry)

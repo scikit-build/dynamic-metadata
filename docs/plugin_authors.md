@@ -53,9 +53,9 @@ project as resolved so far; read another field's value with
 `project["version"]`. The backend calls this hook in the same directory as PEP
 517's hooks.
 
-`settings` never contains the reserved entry keys `provider` and
-`config-settings`, so do not use these names for settings. A backend may replace
-a setting value from a config-setting before your hook runs.
+`settings` never contains the reserved entry keys `provider` and `tool`, so do
+not use these names for settings. A backend may change a setting value (for
+example, from a config-setting) before your hook runs.
 
 ### Relative paths
 
